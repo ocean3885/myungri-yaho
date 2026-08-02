@@ -7,12 +7,13 @@
 ## 1. 프로젝트 개요
 
 - **프로젝트명**: 명리야호 (`myungri-yaho`)
-- **기술 스택**: Next.js (App Router, v15+), Supabase (Auth, Database), Tailwind CSS
+- **기술 스택**: Next.js (App Router, v15+), Supabase (Database, `yaho` 스키마), Next Auth (v5 / Auth.js), Tailwind CSS
 - **핵심 목표**:
   1. 만세력 결과(`BaziResult`) 데이터를 입력받아 사주 해설을 생성하는 독립 서비스 구축
   2. 다단계 프롬프트 파이프라인(원국 -> 성향 -> 적성 -> 운 흐름 -> 최종 통합) 구현
   3. 실시간 프롬프트 변경이 가능한 Admin UI 및 DB 연동
   4. Next.js `after()` API 등을 이용한 백그라운드 AI 해석 비동기 처리
+  5. Supabase의 기본 Auth 대신 Next Auth를 사용해 `yaho.users` 테이블과 독립적인 사용자 인증 처리
 
 ---
 
@@ -21,49 +22,36 @@
 새 프로젝트에 필요한 데이터베이스 스키마(SQL DDL)입니다. Supabase SQL Editor에 그대로 붙여넣어 실행할 수 있습니다.
 
 ```sql
--- 1. 회원 및 역할 관리 테이블 (기본 auth.users와 연계)
-CREATE TABLE public.members (
-    id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
-    email VARCHAR(255) NOT NULL,
+-- 0. yaho 스키마 생성
+CREATE SCHEMA IF NOT EXISTS yaho;
+
+-- 1. 회원 및 역할 관리 테이블 (기본 auth.users와 연계되지 않고 독립적으로 Next Auth와 연계)
+CREATE TABLE yaho.users (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255), -- Next Auth Credentials Provider 등에서 사용
+    name VARCHAR(100),
     role VARCHAR(50) DEFAULT 'user' CHECK (role IN ('admin', 'staff', 'user')),
-    created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+    created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
 -- Row Level Security (RLS) 활성화
-ALTER TABLE public.members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE yaho.users ENABLE ROW LEVEL SECURITY;
 
 -- 2. 프롬프트 파이프라인 및 서비스 설정 테이블
-CREATE TABLE public.service_settings (
+CREATE TABLE yaho.service_settings (
     key VARCHAR(100) PRIMARY KEY,
     value JSONB NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
-ALTER TABLE public.service_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE yaho.service_settings ENABLE ROW LEVEL SECURITY;
 
--- 3. 회원용 무료 사주 해석 신청 및 결과 테이블
-CREATE TABLE public.free_bazi_consultations (
+-- 3. 회원용 사주 해석 신청 및 결과 테이블 (yaho.users와 연계, 비회원 테이블은 생성하지 않음)
+CREATE TABLE yaho.user_consultations (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id UUID REFERENCES auth.users ON DELETE SET NULL,
-    subject_name VARCHAR(100),
-    request_date_kst DATE NOT NULL,
-    bazi_result JSONB NOT NULL,
-    prompt TEXT,
-    result_text TEXT,
-    status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'failed')),
-    completed_at TIMESTAMPTZ,
-    error_message TEXT,
-    prompt_version VARCHAR(100),
-    generation_metadata JSONB,
-    source_guest_consultation_id UUID, -- 비회원 신청에서 연동된 경우
-    created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
-);
-
-ALTER TABLE public.free_bazi_consultations ENABLE ROW LEVEL SECURITY;
-
--- 4. 비회원(게스트) 사주 해석 신청 및 결과 테이블
-CREATE TABLE public.guest_bazi_consultations (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES yaho.users(id) ON DELETE CASCADE,
     subject_name VARCHAR(100),
     request_date_kst DATE NOT NULL,
     bazi_result JSONB NOT NULL,
@@ -77,27 +65,20 @@ CREATE TABLE public.guest_bazi_consultations (
     created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
-ALTER TABLE public.guest_bazi_consultations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE yaho.user_consultations ENABLE ROW LEVEL SECURITY;
 
--- 기본 RLS 정책 설정 예시 (필요에 따라 수정)
--- members 정책
-CREATE POLICY "Allow public read for members" ON public.members FOR SELECT USING (true);
-CREATE POLICY "Allow admin write for members" ON public.members ALL USING (
-    EXISTS (SELECT 1 FROM public.members WHERE id = auth.uid() AND role = 'admin')
-);
+-- 기본 RLS 정책 설정 예시 (Next Auth를 백엔드에서 사용할 경우 DB 접근 권한 설정을 처리해야 함)
+-- API Route 등에서 Supabase Service Role Key를 사용해 RLS를 우회하는 아키텍처를 주로 활용합니다.
 
--- service_settings 정책
-CREATE POLICY "Allow public read for settings" ON public.service_settings FOR SELECT USING (true);
-CREATE POLICY "Allow admin write for settings" ON public.service_settings ALL USING (
-    EXISTS (SELECT 1 FROM public.members WHERE id = auth.uid() AND role = 'admin')
-);
+-- yaho.users 정책
+CREATE POLICY "Allow public read for users" ON yaho.users FOR SELECT USING (true);
 
--- free_bazi_consultations 정책
-CREATE POLICY "Users can view own consultations" ON public.free_bazi_consultations FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own consultations" ON public.free_bazi_consultations FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Admin full access for free consultations" ON public.free_bazi_consultations ALL USING (
-    EXISTS (SELECT 1 FROM public.members WHERE id = auth.uid() AND role = 'admin')
-);
+-- yaho.service_settings 정책
+CREATE POLICY "Allow public read for settings" ON yaho.service_settings FOR SELECT USING (true);
+
+-- yaho.user_consultations 정책
+CREATE POLICY "Allow select for user consultations" ON yaho.user_consultations FOR SELECT USING (true);
+```
 ```
 
 ---
@@ -123,30 +104,23 @@ export const DEEPSEEK_MODEL = 'deepseek-v4-pro';
 - `generateAndStoreBaziInterpretation`: Next.js 15의 `after()` API 내에서 실행되어 백그라운드 스레드에서 DeepSeek API 호출 및 DB 상태를 `pending` -> `completed`/`failed`로 업데이트합니다.
 - 기존 구현 코드 링크 참고: [bazi-consultation.ts](file:///home/ocean3885/projects/dowon-v2/src/lib/bazi-consultation.ts)
 
----
+## 4. 초기 패키지 및 환경 설정
 
-## 4. Next.js 15 신규 프로젝트 생성 및 초기 세팅
+프로젝트 폴더 내에서 필요한 패키지를 설치하고 환경 변수를 구성합니다.
 
-새 프로젝트를 시작하기 위해 터미널에서 다음 단계를 순서대로 수행합니다.
-
-### Step 1: 프로젝트 폴더에서 Next.js 생성
+### Step 1: Supabase, Next Auth 및 필수 패키지 설치
 ```bash
-# projects 폴더 내부 또는 원하는 작업 공간에서 실행
-npx -y create-next-app@latest myungri-yaho --typescript --tailwind --app --src-dir --import-alias "@/*" --use-npm
-```
-
-### Step 2: Supabase 및 필수 패키지 설치
-```bash
-cd myungri-yaho
-npm install @supabase/supabase-js @supabase/ssr lucide-react
+npm install @supabase/supabase-js @supabase/ssr lucide-react next-auth@beta bcryptjs
+npm install --save-dev @types/bcryptjs
 ```
 
 ### Step 3: 환경 변수 구성 (`.env.local`)
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your-supabase-project-url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key # 백그라운드 DB 갱신용
+SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key # 백그라운드 DB 갱신용 (RLS 바이패스 등에 활용)
 DEEPSEEK_API_KEY=your-deepseek-api-key
+AUTH_SECRET=your-next-auth-secret-key # Next Auth에 사용할 시크릿 키
 ```
 
 ---
@@ -165,17 +139,20 @@ DEEPSEEK_API_KEY=your-deepseek-api-key
 1. **API 키 설정**: `process.env.DEEPSEEK_API_KEY`를 사용하여 `https://api.deepseek.com/chat/completions`로 POST 요청을 보냅니다. 기본 모델은 `deepseek-v4-pro`입니다.
 2. **다단계 프롬프트 파이프라인**: 
    - `core` (원국 분석), `personality` (성향), `career` (적성), `flow` (대운/세운) 단계를 거친 뒤, `finalize` 단계에서 최종 결과물을 합성합니다.
-   - 파이프라인 구성(활성화 여부, 프롬프트 문구, 온값, 토큰 크기)은 Supabase DB의 `service_settings` 테이블 (`key = 'bazi_free_consultation_prompt_pipeline'`)에서 동적으로 로드 및 파싱해야 합니다.
-3. **콘텐츠 컴팩션 (Compaction) 로직**: 
+   - 파이프라인 구성(활성화 여부, 프롬프트 문구, 온값, 토큰 크기)은 Supabase DB의 `yaho.service_settings` 테이블 (`key = 'bazi_free_consultation_prompt_pipeline'`)에서 동적으로 로드 및 파싱해야 합니다. (yaho 스키마를 사용하는 것에 유의하세요)
+3. **인증 및 DB 스키마 (Next Auth)**:
+   - Supabase Auth를 사용하지 않고, Next Auth (v5) 및 Credentials Provider를 활용해 독립적으로 `yaho.users` 테이블과 연동합니다. 비밀번호 검증은 bcryptjs를 사용합니다.
+   - 비회원 상담 기능은 없으며, 모든 상담 신청 및 이력은 로그인된 사용자에 한해 `yaho.user_consultations` 테이블에 저장되어야 합니다.
+4. **콘텐츠 컴팩션 (Compaction) 로직**: 
    - 각 분석 단계 결과가 너무 길어지면 최종 프롬프트 한계를 넘어설 수 있으므로, 임계값(예: 4800자)을 넘는 초안은 DeepSeek를 한 번 더 호출해 핵심 판단 중심으로 압축하는 요약 파이프라인을 연계해야 합니다.
-4. **비동기 백그라운드 처리 (Next.js `after`)**:
-   - 사용자가 사주 해석을 요청하면 `/api/bazi/free-consultation` 등에서 DB에 `pending` 상태로 인서트한 뒤, Next.js의 `after()` 함수를 활용하여 백그라운드에서 AI 해석 요청을 비동기 수행하고 완료 시 `completed` 또는 `failed` 상태와 결과 텍스트를 업데이트해야 합니다.
+5. **비동기 백그라운드 처리 (Next.js `after`)**:
+   - 사용자가 사주 해석을 요청하면 `/api/bazi/user-consultation` 등에서 DB (`yaho.user_consultations` 테이블)에 `pending` 상태로 인서트한 뒤, Next.js의 `after()` 함수를 활용하여 백그라운드에서 AI 해석 요청을 비동기 수행하고 완료 시 `completed` 또는 `failed` 상태와 결과 텍스트를 업데이트해야 합니다.
 
 ### 2. 참고할 파일 경로 (기존 프로젝트 기준)
-다음 기존 프로젝트 파일들의 로직을 참고하여 이식하세요:
+다음 기존 프로젝트 파일들의 로직을 참고하여 이식하되, 스키마 및 인증 방식을 새로운 아키텍처에 맞춰 적용해야 합니다:
 - 프롬프트 파이프라인 설정 및 가공: [bazi-prompt-config.ts](file:///home/ocean3885/projects/dowon-v2/src/lib/bazi-prompt-config.ts)
 - 백그라운드 생성 및 DeepSeek 연동: [bazi-consultation.ts](file:///home/ocean3885/projects/dowon-v2/src/lib/bazi-consultation.ts)
-- API 엔드포인트 구현: [route.ts](file:///home/ocean3885/projects/dowon-v2/src/app/api/bazi/free-consultation/route.ts)
+- API 엔드포인트 구현: [route.ts](file:///home/ocean3885/projects/dowon-v2/src/app/api/bazi/free-consultation/route.ts) (경로는 `/api/bazi/user-consultation` 로 변경 및 Next Auth 세션 체크 로직 적용)
 
-위 요구 사항을 바탕으로, `src/lib/deepseek.ts`, `src/lib/bazi-prompt-config.ts`, `src/lib/bazi-consultation.ts`, 그리고 `/api/bazi/free-consultation` 라우트 파일을 신규 작성 및 구성해주세요.
+위 요구 사항을 바탕으로, `src/lib/deepseek.ts`, `src/lib/bazi-prompt-config.ts`, `src/lib/bazi-consultation.ts`, 그리고 `/api/bazi/user-consultation` 라우트 파일을 신규 작성 및 구성해주세요.
 ````
