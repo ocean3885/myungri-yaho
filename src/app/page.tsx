@@ -1,20 +1,22 @@
 import React from 'react';
 import { auth } from '@/auth';
 import { createAdminClient } from '@/utils/supabase/server';
-import { calculateDailyFortune } from '@/lib/fortune-calculator';
 import HomeClient from './HomeClient';
+
+type ConsultationItem = {
+    id: string;
+    subject_name: string;
+    status: string;
+    request_date_kst: string;
+    result_text?: string;
+};
 
 export default async function Home() {
     const session = await auth();
     const user = session?.user || null;
-    let initialConsultations: any[] = [];
-    let fortuneData = undefined;
+    let initialConsultations: ConsultationItem[] = [];
 
     if (user?.id) {
-        if (user.email) {
-            fortuneData = calculateDailyFortune(user.email);
-        }
-        
         try {
             const adminSupabase = await createAdminClient();
             const { data, error } = await adminSupabase
@@ -42,7 +44,6 @@ export default async function Home() {
         <HomeClient 
             user={user} 
             initialConsultations={initialConsultations} 
-            fortuneData={fortuneData}
         />
     );
 }

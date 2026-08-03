@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { Home as HomeIcon, MessageSquare, Compass, Archive, User } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Archive, Home as HomeIcon, User, UserRound } from 'lucide-react';
 
 type Props = {
   activeTab: string;
@@ -9,47 +10,66 @@ type Props = {
 };
 
 export default function HomeBottomNav({ activeTab, setActiveTab }: Props) {
+  const router = useRouter();
+
+  const itemClass = (tab: string) =>
+    `relative flex cursor-pointer flex-col items-center transition ${
+      activeTab === tab ? 'text-[#171553]' : 'text-[#3e3e3e]'
+    }`;
+  const labelClass = (tab: string) =>
+    `mt-1 text-[12px] ${activeTab === tab ? 'font-semibold' : 'font-normal'}`;
+  const activeMarker = (tab: string) =>
+    activeTab === tab ? <span className="absolute -top-3 h-1.5 w-8 rounded-full bg-[#dda445]" /> : null;
+
   return (
-    <div className="fixed bottom-0 left-1/2 -translate-x-1/2 max-w-[480px] w-full bg-white border-t border-zinc-100/80 py-2.5 px-4 flex justify-between items-center z-50 shadow-[0_-5px_25px_rgba(0,0,0,0.03)]">
-      <button 
-        onClick={() => setActiveTab('home')}
-        className={`flex flex-col items-center flex-1 cursor-pointer transition ${activeTab === 'home' ? 'text-indigo-600' : 'text-zinc-400'}`}
+    <nav className="fixed bottom-0 left-1/2 z-50 grid w-full max-w-[430px] -translate-x-1/2 grid-cols-4 rounded-t-[22px] border border-[#e9e4dd] bg-white px-4 pb-5 pt-3 shadow-[0_-10px_24px_rgba(76,55,30,0.1)]">
+      <button
+        onClick={() => {
+          setActiveTab('home');
+          router.push('/');
+        }}
+        className={itemClass('home')}
       >
-        <HomeIcon className="w-5 h-5 stroke-[1.8]" />
-        <span className="text-[9px] font-bold mt-1.5">홈</span>
+        {activeMarker('home')}
+        <HomeIcon className="h-8 w-8" strokeWidth={1.9} />
+        <span className={labelClass('home')}>홈</span>
       </button>
-      
-      <button 
-        onClick={() => alert('상담 기능 페이지를 준비 중입니다.')}
-        className={`flex flex-col items-center flex-1 cursor-pointer transition ${activeTab === 'consult' ? 'text-indigo-600' : 'text-zinc-400'}`}
+
+      <button
+        onClick={() => {
+          setActiveTab('people');
+          router.push('/people');
+        }}
+        className={itemClass('people')}
       >
-        <MessageSquare className="w-5 h-5 stroke-[1.8]" />
-        <span className="text-[9px] font-bold mt-1.5">상담</span>
+        {activeMarker('people')}
+        <UserRound className="h-8 w-8" strokeWidth={1.9} />
+        <span className={labelClass('people')}>인물</span>
       </button>
-      
-      <button 
-        onClick={() => alert('운세 기능 페이지를 준비 중입니다.')}
-        className={`flex flex-col items-center flex-1 cursor-pointer transition ${activeTab === 'fortune' ? 'text-indigo-600' : 'text-zinc-400'}`}
+
+      <button
+        onClick={() => {
+          setActiveTab('archive');
+          alert('보관함 기능 페이지를 준비 중입니다.');
+        }}
+        className={itemClass('archive')}
       >
-        <Compass className="w-5 h-5 stroke-[1.8]" />
-        <span className="text-[9px] font-bold mt-1.5">운세</span>
+        {activeMarker('archive')}
+        <Archive className="h-8 w-8" strokeWidth={1.9} />
+        <span className={labelClass('archive')}>보관함</span>
       </button>
-      
-      <button 
-        onClick={() => alert('보관함 기능 페이지를 준비 중입니다.')}
-        className={`flex flex-col items-center flex-1 cursor-pointer transition ${activeTab === 'record' ? 'text-indigo-600' : 'text-zinc-400'}`}
+
+      <button
+        onClick={() => {
+          setActiveTab('my');
+          alert('마이 페이지를 준비 중입니다.');
+        }}
+        className={itemClass('my')}
       >
-        <Archive className="w-5 h-5 stroke-[1.8]" />
-        <span className="text-[9px] font-bold mt-1.5">보관함</span>
+        {activeMarker('my')}
+        <User className="h-8 w-8" strokeWidth={1.9} />
+        <span className={labelClass('my')}>MY</span>
       </button>
-      
-      <button 
-        onClick={() => alert('마이 페이지를 준비 중입니다.')}
-        className={`flex flex-col items-center flex-1 cursor-pointer transition ${activeTab === 'my' ? 'text-indigo-600' : 'text-zinc-400'}`}
-      >
-        <User className="w-5 h-5 stroke-[1.8]" />
-        <span className="text-[9px] font-bold mt-1.5">MY</span>
-      </button>
-    </div>
+    </nav>
   );
 }

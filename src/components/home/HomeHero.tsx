@@ -2,8 +2,8 @@
 
 import React from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
-import { ChevronRight } from 'lucide-react';
+
+import HomeHeroActionButton from './HomeHeroActionButton';
 
 type UserSession = {
   id?: string;
@@ -12,61 +12,54 @@ type UserSession = {
   role?: string | null;
 };
 
-type Props = {
-  user: UserSession | null;
+type ConsultationItem = {
+  id: string;
+  subject_name: string;
+  status: string;
+  request_date_kst: string;
+  result_text?: string;
 };
 
-export default function HomeHero({ user }: Props) {
+type Props = {
+  user: UserSession | null;
+  consultations: ConsultationItem[];
+};
+
+export default function HomeHero({ user, consultations }: Props) {
+  const currentSubject = consultations[0]?.subject_name || user?.name || '김명리';
+
   return (
-    <div className="relative z-10 grid grid-cols-12 gap-2 items-center mb-8">
-      <div className="col-span-7 pr-2">
-        <h2 className="text-[25px] font-extrabold text-white leading-tight tracking-tight font-sans">
-          내 사주가 들려주는<br />오늘의 이야기
+    <section className="relative mt-5 min-h-[324px] overflow-hidden rounded-[12px] border border-[#f1dfcc] bg-[#FFF8F0] px-5 py-7 shadow-[0_10px_25px_rgba(92,61,25,0.07)]">
+      <div className="pointer-events-none absolute right-0 top-14 h-12 w-24 rounded-l-full border-y border-l border-white/70" />
+      <div className="pointer-events-none absolute bottom-0 right-0 h-16 w-[158px] rounded-tl-full bg-[#f3e5d9]" />
+      <div className="pointer-events-none absolute right-28 top-[108px] text-[32px] font-black leading-none text-[#e7ad2d]">
+        *
+      </div>
+
+      <div className="relative z-10">
+        <h2 className="font-display text-[25px] font-semibold leading-[1.42] tracking-normal text-[#171553] max-[360px]:text-[22px]">
+          사주로 나와 소중한 사람을 더 깊이 이해해보세요
         </h2>
-        <p className="text-zinc-400 text-xs mt-3 leading-relaxed font-medium">
-          생년월일과 태어난 시간을 바탕으로 나만의 명리 해석을 만나보세요.
+        <p className="mt-5 max-w-[58%] text-[14px] font-normal leading-[1.68] text-[#171717] max-[360px]:max-w-[60%] max-[360px]:text-[13px]">
+          저장된 인물의 생년월일시를 바탕으로 성향, 흐름, 고민 상담을 확인할 수 있어요.
         </p>
-        
-        {/* Main Action Button */}
-        <div className="mt-6">
-          {user ? (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 border border-white/10 text-white text-xs font-semibold backdrop-blur-md">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-              <span>{user.name}님 분석 진행 중</span>
-            </div>
-          ) : (
-            <Link 
-              href="/auth/signin"
-              className="inline-flex items-center justify-center gap-1.5 px-5 py-3 rounded-full bg-[#523be4] hover:bg-[#432fd0] text-white text-xs font-bold transition duration-300 shadow-lg shadow-[#523be4]/30"
-            >
-              <span>무료로 오늘의 운세 보기</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
-          )}
-        </div>
 
-        {!user && (
-          <span className="text-[10px] text-zinc-500 mt-3 block font-medium">
-            이미 계정이 있으신가요?{' '}
-            <Link href="/auth/signin" className="text-purple-400 hover:underline">
-              로그인
-            </Link>
-          </span>
-        )}
+        <HomeHeroActionButton
+          href={user ? undefined : '/auth/signin'}
+          onClick={user ? () => alert(`${currentSubject}님의 사주 분석 기능을 준비 중입니다.`) : undefined}
+        />
       </div>
 
-      {/* Female Counselor Asset */}
-      <div className="col-span-5 relative flex justify-end">
-        <div className="w-32 h-32 relative flex items-center justify-center rounded-full overflow-hidden bg-gradient-to-b from-[#2b2554]/30 to-transparent">
-          <Image 
-            src="/images/yaho_female_helper.png"
-            alt="Helper Avatar"
-            fill
-            priority
-            className="object-cover scale-110 translate-y-1.5"
-          />
-        </div>
+      <div className="absolute -right-4 bottom-0 h-[194px] w-[194px] max-[360px]:-right-8 max-[360px]:h-[168px] max-[360px]:w-[168px]">
+        <Image
+          src="/images/myungho/myho-hello.webp"
+          alt="명리야호 캐릭터"
+          fill
+          priority
+          sizes="220px"
+          className="object-contain drop-shadow-[0_18px_20px_rgba(73,45,20,0.22)]"
+        />
       </div>
-    </div>
+    </section>
   );
 }

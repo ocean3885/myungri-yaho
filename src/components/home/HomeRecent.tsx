@@ -1,8 +1,7 @@
 'use client';
 
 import React from 'react';
-import Image from 'next/image';
-import { MessageSquare, ChevronRight } from 'lucide-react';
+import { ChevronRight, FileText, Heart } from 'lucide-react';
 
 type ConsultationItem = {
   id: string;
@@ -17,65 +16,90 @@ type Props = {
 };
 
 export default function HomeRecent({ consultations }: Props) {
+  const fallbackConsultations = [
+    {
+      id: 'sample-basic',
+      subject_name: '김명리',
+      title: '기본 사주 분석',
+      tags: '신중함 · 책임감 · 독립성',
+      date: '오늘',
+      icon: FileText,
+      tone: 'lavender',
+    },
+    {
+      id: 'sample-love',
+      subject_name: '박야호',
+      title: '연애 성향 상담',
+      tags: '배려심 · 현실감 · 따뜻함',
+      date: '2일 전',
+      icon: Heart,
+      tone: 'coral',
+    },
+  ];
+
+  const visibleConsultations = consultations.slice(0, 2).map((item, index) => ({
+    id: item.id,
+    subject_name: item.subject_name || (index === 0 ? '김명리' : '박야호'),
+    title: index === 0 ? '기본 사주 분석' : '연애 성향 상담',
+    tags: item.result_text || (index === 0 ? '신중함 · 책임감 · 독립성' : '배려심 · 현실감 · 따뜻함'),
+    date: item.request_date_kst || (index === 0 ? '오늘' : '2일 전'),
+    icon: index === 0 ? FileText : Heart,
+    tone: index === 0 ? 'lavender' : 'coral',
+  }));
+
+  const recentItems = visibleConsultations.length > 0 ? visibleConsultations : fallbackConsultations;
+
   return (
-    <div className="mb-4">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="font-extrabold text-[15px] text-zinc-900 tracking-tight font-sans">최근 상담</h3>
-        <button 
+    <section className="mt-6">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-[18px] font-semibold text-[#111111]">최근 상담 기록</h3>
+        <button
+          type="button"
           onClick={() => alert('전체 상담 목록 페이지를 준비 중입니다.')}
-          className="text-[11px] text-zinc-400 font-semibold hover:text-zinc-600 transition flex items-center cursor-pointer"
+          className="flex items-center text-[14px] font-medium text-[#171553]"
         >
           <span>전체 보기</span>
-          <ChevronRight className="w-3 h-3" />
+          <ChevronRight className="h-5 w-5" />
         </button>
       </div>
 
-      {consultations.length > 0 ? (
-        <div className="space-y-3">
-          {consultations.map((item, idx) => (
-            <div key={idx} className="p-4 rounded-2xl border border-zinc-100 bg-white hover:shadow-xs transition duration-200">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full overflow-hidden bg-purple-950 flex-shrink-0">
-                  <Image 
-                    src="/images/yaho_female_helper.png"
-                    alt="Avatar"
-                    width={32}
-                    height={32}
-                    className="object-cover scale-110 translate-y-1.5"
-                  />
-                </div>
-                <div className="flex-1">
-                  <h4 className="font-bold text-xs text-zinc-800 leading-tight">
-                    {item.subject_name || '상담 요청 건'}
-                  </h4>
-                  <span className="text-[10px] text-zinc-400 font-medium mt-1 block">
-                    {item.request_date_kst} · {item.status === 'pending' ? '분석 중' : '분석 완료'}
-                  </span>
-                  <p className="text-xs text-zinc-500 mt-2 font-medium leading-relaxed line-clamp-2">
-                    {item.result_text || '해설을 준비하고 있습니다. 잠시만 기다려주세요.'}
-                  </p>
-                </div>
-                <button 
-                  onClick={() => alert(item.result_text || '아직 조언이 완료되지 않았습니다.')}
-                  className="px-3.5 py-2 rounded-lg border border-purple-200 hover:bg-purple-50 transition text-purple-600 text-xs font-bold flex-shrink-0 cursor-pointer self-end"
-                >
-                  {item.status === 'pending' ? '대기 중' : '이어하기'}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="py-10 text-center text-zinc-400 text-xs bg-white border border-zinc-100 rounded-2xl flex flex-col items-center justify-center gap-2">
-          <div className="w-10 h-10 rounded-full bg-zinc-50 flex items-center justify-center">
-            <MessageSquare className="w-5 h-5 text-zinc-300 stroke-[1.5]" />
-          </div>
-          <div className="text-center">
-            <p className="font-bold text-zinc-500 text-xs">최근 상담이 없습니다.</p>
-            <p className="text-[10px] text-zinc-400 mt-0.5 font-medium">궁금한 고민을 아호에게 물어보세요.</p>
-          </div>
-        </div>
-      )}
-    </div>
+      <div className="overflow-hidden rounded-[12px] border border-[#ead8c6] bg-white shadow-[0_8px_24px_rgba(92,61,25,0.05)]">
+        {recentItems.map((item, index) => {
+          const Icon = item.icon;
+          const isCoral = item.tone === 'coral';
+
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => alert(`${item.subject_name}님의 ${item.title}을 준비 중입니다.`)}
+              className={`flex min-h-[78px] w-full items-center gap-4 px-4 py-3 text-left ${
+                index > 0 ? 'border-t border-[#f0e4d8]' : ''
+              }`}
+            >
+              <span
+                className={`flex h-[50px] w-[50px] shrink-0 items-center justify-center rounded-full ${
+                  isCoral ? 'bg-[#ffe1d8] text-[#ed4260]' : 'bg-[#e8e1ef] text-[#171553]'
+                }`}
+              >
+                <Icon className="h-7 w-7" strokeWidth={1.9} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[16px] font-semibold text-[#171553]">
+                  {item.subject_name} · {item.title}
+                </span>
+                <span className="mt-0.5 block truncate text-[13px] font-normal text-[#454545]">
+                  {item.tags}
+                </span>
+                <span className="mt-0.5 block text-[13px] font-normal text-[#777777]">
+                  {item.date}
+                </span>
+              </span>
+              <ChevronRight className="h-7 w-7 shrink-0 text-[#171553] stroke-[2.4]" />
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
