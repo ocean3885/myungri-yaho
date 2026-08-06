@@ -19,15 +19,15 @@ export default async function Home() {
     if (user?.id) {
         try {
             const adminSupabase = await createAdminClient();
-            const { data, error } = await adminSupabase
+            const { data: consultations, error: consultationError } = await adminSupabase
                 .from('user_consultations')
                 .select('*')
                 .eq('user_id', user.id)
                 .order('created_at', { ascending: false })
                 .limit(5);
 
-            if (!error && data) {
-                initialConsultations = data.map((item) => ({
+            if (!consultationError && consultations) {
+                initialConsultations = consultations.map((item) => ({
                     id: item.id,
                     subject_name: item.subject_name,
                     status: item.status,
@@ -41,9 +41,9 @@ export default async function Home() {
     }
 
     return (
-        <HomeClient 
-            user={user} 
-            initialConsultations={initialConsultations} 
+        <HomeClient
+            user={user}
+            initialConsultations={initialConsultations}
         />
     );
 }

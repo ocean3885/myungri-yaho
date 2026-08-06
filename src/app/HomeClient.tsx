@@ -5,7 +5,6 @@ import { useState } from 'react';
 import HomeBottomNav from '@/components/home/HomeBottomNav';
 import HomeHeader from '@/components/home/HomeHeader';
 import HomeHero from '@/components/home/HomeHero';
-import HomePersonSelector from '@/components/home/HomePersonSelector';
 import HomeQuickMenu from '@/components/home/HomeQuickMenu';
 import HomeRecent from '@/components/home/HomeRecent';
 
@@ -37,7 +36,6 @@ export default function HomeClient({ user, initialConsultations }: Props) {
       <div className="relative flex min-h-screen w-full max-w-[430px] flex-col overflow-hidden bg-[#FEFAF5] shadow-[0_0_45px_rgba(47,34,17,0.12)]">
         <main className="relative z-10 flex-1 px-6 pb-28 pt-7">
           <HomeHeader />
-          {user && <HomePersonSelector user={user} consultations={initialConsultations} />}
           <HomeHero user={user} consultations={initialConsultations} />
           <HomeRecent consultations={initialConsultations} />
           <HomeQuickMenu />

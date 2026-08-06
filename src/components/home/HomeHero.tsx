@@ -37,7 +37,7 @@ export default function HomeHero({ user, consultations }: Props) {
       </div>
 
       <div className="relative z-10">
-        <h2 className="font-display text-[25px] font-semibold leading-[1.42] tracking-normal text-[#171553] max-[360px]:text-[22px]">
+        <h2 className="font-display text-[25px] font-medium leading-[1.42] tracking-normal text-[#171553] max-[360px]:text-[22px]">
           사주로 나와 소중한 사람을 더 깊이 이해해보세요
         </h2>
         <p className="mt-5 max-w-[58%] text-[14px] font-normal leading-[1.68] text-[#171717] max-[360px]:max-w-[60%] max-[360px]:text-[13px]">
