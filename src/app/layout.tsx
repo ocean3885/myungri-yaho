@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import HomeAppShell from "@/components/home/HomeAppShell";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,7 +17,9 @@ export default function RootLayout({
       lang="ko"
       className="h-full antialiased"
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <HomeAppShell>{children}</HomeAppShell>
+      </body>
     </html>
   );
 }

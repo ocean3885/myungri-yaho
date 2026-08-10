@@ -1,16 +1,13 @@
 'use client';
 
 import React from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Archive, Home as HomeIcon, User, UserRound } from 'lucide-react';
 
-type Props = {
-  activeTab: string;
-  setActiveTab: (val: string) => void;
-};
-
-export default function HomeBottomNav({ activeTab, setActiveTab }: Props) {
+export default function HomeBottomNav() {
   const router = useRouter();
+  const pathname = usePathname();
+  const activeTab = pathname === '/people' ? 'people' : pathname === '/my' ? 'my' : 'home';
 
   const itemClass = (tab: string) =>
     `relative flex cursor-pointer flex-col items-center transition ${
@@ -22,10 +19,9 @@ export default function HomeBottomNav({ activeTab, setActiveTab }: Props) {
     activeTab === tab ? <span className="absolute -top-3 h-1.5 w-8 rounded-full bg-[#dda445]" /> : null;
 
   return (
-    <nav className="fixed bottom-0 left-1/2 z-50 grid w-full max-w-[430px] -translate-x-1/2 grid-cols-4 rounded-t-[22px] border border-[#e9e4dd] bg-white px-4 pb-5 pt-3 shadow-[0_-10px_24px_rgba(76,55,30,0.1)]">
+    <nav className="fixed bottom-0 left-1/2 z-50 grid w-full max-w-[480px] -translate-x-1/2 grid-cols-4 rounded-t-[22px] border border-[#e9e4dd] bg-white px-4 pb-5 pt-3 shadow-[0_-10px_24px_rgba(76,55,30,0.1)]">
       <button
         onClick={() => {
-          setActiveTab('home');
           router.push('/');
         }}
         className={itemClass('home')}
@@ -37,7 +33,6 @@ export default function HomeBottomNav({ activeTab, setActiveTab }: Props) {
 
       <button
         onClick={() => {
-          setActiveTab('people');
           router.push('/people');
         }}
         className={itemClass('people')}
@@ -49,7 +44,6 @@ export default function HomeBottomNav({ activeTab, setActiveTab }: Props) {
 
       <button
         onClick={() => {
-          setActiveTab('archive');
           alert('보관함 기능 페이지를 준비 중입니다.');
         }}
         className={itemClass('archive')}
@@ -61,8 +55,7 @@ export default function HomeBottomNav({ activeTab, setActiveTab }: Props) {
 
       <button
         onClick={() => {
-          setActiveTab('my');
-          alert('마이 페이지를 준비 중입니다.');
+          router.push('/my');
         }}
         className={itemClass('my')}
       >

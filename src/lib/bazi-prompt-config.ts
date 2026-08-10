@@ -1,8 +1,10 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
 import type { BaziResult } from '@/components/bazi/types';
 import { DEEPSEEK_MODEL } from '@/lib/deepseek';
 
-export const BAZI_PROMPT_SETTING_KEY = 'bazi_free_consultation_prompt_pipeline';
+export const BAZI_PROMPT_SETTING_PREFIX = 'prompt.bazi';
+export const DEFAULT_BAZI_CONSULTATION_TYPE = 'free_basic';
+export const LEGACY_BAZI_PROMPT_SETTING_KEY = 'bazi_free_consultation_prompt_pipeline';
+export const DEFAULT_BAZI_PROMPT_SETTING_KEY = getBaziPromptSettingKey(DEFAULT_BAZI_CONSULTATION_TYPE);
 
 export type BaziPromptStepConfig = {
     key: string;
@@ -43,6 +45,37 @@ export type BaziGenerationMetadata = {
     model: string;
     generatedAt: string;
     steps: BaziPromptStepResult[];
+};
+
+type SettingsQueryClient = {
+    from: (table: 'service_settings') => {
+        select: ((columns: 'value') => {
+            eq: (column: 'key', value: string) => {
+                maybeSingle: () => Promise<SettingsSingleResult>;
+            };
+        }) & ((columns: 'key, value, updated_at') => {
+            like: (column: 'key', pattern: string) => {
+                order: (column: 'key', options: { ascending: boolean }) => Promise<SettingsListResult>;
+            };
+        });
+    };
+};
+
+type SettingsSingleResult = {
+    data: { value?: unknown } | null;
+    error: { message?: string } | null;
+};
+
+type SettingsListResult = {
+    data: Array<{ key: string; value?: unknown; updated_at?: string | null }> | null;
+    error: { message?: string } | null;
+};
+
+export type BaziPromptSetting = {
+    key: string;
+    consultationType: string;
+    config: BaziPromptPipelineConfig;
+    updatedAt: string | null;
 };
 
 export const defaultBaziPromptPipelineConfig: BaziPromptPipelineConfig = {
@@ -137,11 +170,44 @@ export const defaultBaziPromptPipelineConfig: BaziPromptPipelineConfig = {
     },
 };
 
-export async function getBaziPromptPipelineConfig(adminSupabase: SupabaseClient) {
-    const { data, error } = await adminSupabase
+export function getBaziPromptSettingKey(consultationType: string) {
+    return `${BAZI_PROMPT_SETTING_PREFIX}.${normalizeBaziConsultationType(consultationType)}`;
+}
+
+export function normalizeBaziConsultationType(value: unknown) {
+    if (typeof value !== 'string') return DEFAULT_BAZI_CONSULTATION_TYPE;
+
+    return value
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 50) || DEFAULT_BAZI_CONSULTATION_TYPE;
+}
+
+export function getBaziConsultationTypeFromSettingKey(key: string) {
+    return key.startsWith(`${BAZI_PROMPT_SETTING_PREFIX}.`)
+        ? normalizeBaziConsultationType(key.slice(BAZI_PROMPT_SETTING_PREFIX.length + 1))
+        : DEFAULT_BAZI_CONSULTATION_TYPE;
+}
+
+export function isBaziPromptSettingKey(value: unknown): value is string {
+    return typeof value === 'string'
+        && value.startsWith(`${BAZI_PROMPT_SETTING_PREFIX}.`)
+        && value === getBaziPromptSettingKey(getBaziConsultationTypeFromSettingKey(value));
+}
+
+export async function getBaziPromptPipelineConfig(
+    adminSupabase: unknown,
+    consultationType: string = DEFAULT_BAZI_CONSULTATION_TYPE,
+) {
+    const settingsClient = adminSupabase as SettingsQueryClient;
+    const settingKey = getBaziPromptSettingKey(consultationType);
+    const { data, error } = await settingsClient
         .from('service_settings')
         .select('value')
-        .eq('key', BAZI_PROMPT_SETTING_KEY)
+        .eq('key', settingKey)
         .maybeSingle();
 
     if (error) {
@@ -149,7 +215,61 @@ export async function getBaziPromptPipelineConfig(adminSupabase: SupabaseClient)
         return defaultBaziPromptPipelineConfig;
     }
 
+    if (!data?.value && settingKey === DEFAULT_BAZI_PROMPT_SETTING_KEY) {
+        const legacyResult = await settingsClient
+            .from('service_settings')
+            .select('value')
+            .eq('key', LEGACY_BAZI_PROMPT_SETTING_KEY)
+            .maybeSingle();
+
+        if (!legacyResult.error && legacyResult.data?.value) {
+            return normalizeBaziPromptPipelineConfig(legacyResult.data.value);
+        }
+    }
+
     return normalizeBaziPromptPipelineConfig(data?.value);
+}
+
+export async function listBaziPromptSettings(adminSupabase: unknown): Promise<BaziPromptSetting[]> {
+    const settingsClient = adminSupabase as SettingsQueryClient;
+    const { data, error } = await settingsClient
+        .from('service_settings')
+        .select('key, value, updated_at')
+        .like('key', `${BAZI_PROMPT_SETTING_PREFIX}.%`)
+        .order('key', { ascending: true });
+
+    if (error) {
+        console.error('Bazi prompt settings list query error:', error);
+        return [getDefaultBaziPromptSetting()];
+    }
+
+    const settings = (data || [])
+        .filter((item) => isBaziPromptSettingKey(item.key))
+        .map((item) => ({
+            key: item.key,
+            consultationType: getBaziConsultationTypeFromSettingKey(item.key),
+            config: normalizeBaziPromptPipelineConfig(item.value),
+            updatedAt: item.updated_at || null,
+        }));
+
+    if (settings.length > 0) {
+        return settings;
+    }
+
+    const legacyConfig = await getBaziPromptPipelineConfig(adminSupabase);
+    return [{
+        ...getDefaultBaziPromptSetting(),
+        config: legacyConfig,
+    }];
+}
+
+export function getDefaultBaziPromptSetting(): BaziPromptSetting {
+    return {
+        key: DEFAULT_BAZI_PROMPT_SETTING_KEY,
+        consultationType: DEFAULT_BAZI_CONSULTATION_TYPE,
+        config: defaultBaziPromptPipelineConfig,
+        updatedAt: null,
+    };
 }
 
 export function normalizeBaziPromptPipelineConfig(value: unknown): BaziPromptPipelineConfig {

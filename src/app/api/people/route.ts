@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
           birth_params: body.birthParams,
         },
       })
-      .select('id, name, relation, gender, calendar, birth_date, birth_time, birth_params, created_at')
+      .select('id, name, relation, gender, calendar, birth_date, birth_time, birth_params, bazi_result, created_at')
       .single();
 
     if (error) throw error;
@@ -110,6 +110,7 @@ export async function POST(request: NextRequest) {
         birthDate: data.birth_date,
         birthTime: data.birth_time,
         birthParams: data.birth_params,
+        baziResult: data.bazi_result,
         createdAt: data.created_at,
       },
     });

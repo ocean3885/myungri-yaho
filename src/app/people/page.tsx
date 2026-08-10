@@ -13,7 +13,7 @@ export default async function PeoplePage() {
       const adminSupabase = await createAdminClient();
       const { data, error } = await adminSupabase
         .from('people')
-        .select('id, name, relation, gender, calendar, birth_date, birth_time, birth_params, created_at')
+        .select('id, name, relation, gender, calendar, birth_date, birth_time, birth_params, bazi_result, created_at')
         .eq('user_id', session.user.id)
         .order('created_at', { ascending: false })
         .limit(30);
@@ -28,6 +28,7 @@ export default async function PeoplePage() {
           birthDate: person.birth_date,
           birthTime: person.birth_time,
           birthParams: person.birth_params,
+          baziResult: person.bazi_result,
           createdAt: person.created_at,
         }));
       }

@@ -1,10 +1,9 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { CalendarDays, Check, ChevronLeft, Compass, LockKeyhole, Sparkles, Trash2, UserRound, X } from 'lucide-react';
 
-import HomeBottomNav from '@/components/home/HomeBottomNav';
 import type { BaziResult, PillarKey } from '@/components/bazi/types';
 
 const birthHourOptions = Array.from({ length: 12 }, (_, index) => index);
@@ -38,12 +37,12 @@ const elementByChar: Record<string, string> = {
   壬: '수', 癸: '수', 子: '수', 亥: '수',
 };
 
-const elementColors: Record<string, { bg: string; hex: string; hanja: string; trait: string }> = {
-  목: { bg: 'bg-[#417e50]', hex: '#417e50', hanja: '木', trait: '성장과 추진' },
-  화: { bg: 'bg-[#db3c39]', hex: '#db3c39', hanja: '火', trait: '표현과 활력' },
-  토: { bg: 'bg-[#c58e49]', hex: '#c58e49', hanja: '土', trait: '안정과 조율' },
-  금: { bg: 'bg-[#8f9190]', hex: '#8f9190', hanja: '金', trait: '정리와 판단' },
-  수: { bg: 'bg-[#5f9ec1]', hex: '#5f9ec1', hanja: '水', trait: '유연함과 사고' },
+const elementColors: Record<string, { bg: string; hex: string; hanja: string }> = {
+  목: { bg: 'bg-[#417e50]', hex: '#417e50', hanja: '木' },
+  화: { bg: 'bg-[#db3c39]', hex: '#db3c39', hanja: '火' },
+  토: { bg: 'bg-[#c58e49]', hex: '#c58e49', hanja: '土' },
+  금: { bg: 'bg-[#8f9190]', hex: '#8f9190', hanja: '金' },
+  수: { bg: 'bg-[#5f9ec1]', hex: '#5f9ec1', hanja: '水' },
 };
 
 const hiddenStemsByBranch: Record<string, string[]> = {
@@ -66,11 +65,6 @@ const hiddenStemWeightsByLength: Record<number, number[]> = {
   2: [0.7, 0.3],
   3: [0.6, 0.3, 0.1],
 };
-
-const interactionLabels = [
-  { key: 'branch_interactions', label: '지지 작용' },
-  { key: 'stem_interactions', label: '천간 작용' },
-] as const;
 
 type Preview = {
   name: string;
@@ -106,6 +100,7 @@ export type SavedPerson = {
   birthDate: string;
   birthTime?: string | null;
   birthParams?: BaziResult['birth_params'];
+  baziResult?: BaziResult;
   createdAt?: string;
 };
 
@@ -289,17 +284,6 @@ function buildConicGradient(elements: ReturnType<typeof getElementBalance>) {
   return `conic-gradient(${segments.join(',')})`;
 }
 
-function getElementBalanceDescription(elements: ReturnType<typeof getElementBalance>) {
-  const strongest = [...elements].sort((a, b) => b.value - a.value)[0];
-  const weakest = [...elements].sort((a, b) => a.value - b.value)[0];
-
-  if (!strongest || !weakest) {
-    return '천간과 지장간을 함께 보면 오행의 분포를 확인할 수 있어요.';
-  }
-
-  return `${strongest.label}의 ${strongest.trait} 기운이 두드러지고, ${weakest.label}의 ${weakest.trait} 감각을 보완하면 균형을 잡는 데 도움이 돼요.`;
-}
-
 function getCurrentDaewoon(result: BaziResult) {
   const currentYear = new Date().getFullYear();
   const list = result.daewoon?.list || [];
@@ -316,21 +300,6 @@ function formatDaewoonRange(item?: NonNullable<BaziResult['daewoon']>['current']
   const year = item.start_year !== undefined && item.end_year !== undefined ? `${item.start_year}~${item.end_year}년` : '연도 정보 없음';
 
   return `${age} · ${year}`;
-}
-
-function getInteractionSummary(result: BaziResult) {
-  const summary = result.analysis?.summary as Record<string, unknown> | undefined;
-  if (!summary) return [];
-
-  return interactionLabels.flatMap((config) => {
-    const value = summary[config.key];
-    if (!Array.isArray(value)) return [];
-
-    return value
-      .map((item) => String(item).trim())
-      .filter(Boolean)
-      .map((item) => ({ label: config.label, value: item }));
-  });
 }
 
 function isSavedPerson(value: unknown): value is SavedPerson {
@@ -358,17 +327,33 @@ function getSavedPersonForm(person: SavedPerson): FormState {
   };
 }
 
+function hasBirthParams(value: BaziResult['birth_params']): value is NonNullable<BaziResult['birth_params']> {
+  return Boolean(value?.year && value.month && value.day && value.hour && value.min && value.sl && value.gen);
+}
+
+function getSavedPersonPreview(person: SavedPerson, form: FormState) {
+  const birthParams = hasBirthParams(person.birthParams)
+    ? person.birthParams
+    : hasBirthParams(person.baziResult?.birth_params)
+      ? person.baziResult.birth_params
+      : null;
+
+  if (!person.baziResult?.four_pillars || !birthParams) return null;
+
+  return buildPreview(form, { ...person.baziResult, birth_params: birthParams }, birthParams);
+}
+
 function formatSavedPersonMeta(person: SavedPerson) {
   return `${person.calendar} ${person.birthDate} ${person.birthTime || '시간 모름'} · ${person.gender}`;
 }
 
 export default function PeopleClient({ isAuthenticated, initialPeople }: Props) {
-  const [activeTab, setActiveTab] = useState('people');
   const [people, setPeople] = useState(initialPeople);
   const [isPeopleModalOpen, setIsPeopleModalOpen] = useState(false);
   const [deletingPersonId, setDeletingPersonId] = useState('');
   const [peopleMessageType, setPeopleMessageType] = useState<'success' | 'error'>('success');
   const [peopleMessage, setPeopleMessage] = useState('');
+  const [loadMessage, setLoadMessage] = useState('');
   const [form, setForm] = useState<FormState>(initialForm);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -379,8 +364,32 @@ export default function PeopleClient({ isAuthenticated, initialPeople }: Props) 
   const isValidBirthDate = useMemo(() => parseBirthDate(form.birthDate) !== null, [form.birthDate]);
   const canPreview = useMemo(() => form.name.trim().length > 0 && isValidBirthDate, [form.name, isValidBirthDate]);
 
+  useEffect(() => {
+    if (!loadMessage) return;
+
+    const timer = window.setTimeout(() => {
+      setLoadMessage('');
+    }, 3000);
+
+    return () => window.clearTimeout(timer);
+  }, [loadMessage]);
+
+  useEffect(() => {
+    if (!isPeopleModalOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isPeopleModalOpen]);
+
   const updateField = (key: keyof FormState, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+    setPreview(null);
+    setSaveStatus('idle');
+    setSaveMessage('');
   };
 
   const updateBirthDate = (value: string) => {
@@ -400,12 +409,16 @@ export default function PeopleClient({ isAuthenticated, initialPeople }: Props) 
   };
 
   const loadSavedPerson = (person: SavedPerson) => {
-    setForm(getSavedPersonForm(person));
-    setPreview(null);
+    const savedForm = getSavedPersonForm(person);
+    const savedPreview = getSavedPersonPreview(person, savedForm);
+
+    setForm(savedForm);
+    setPreview(savedPreview);
     setErrorMessage('');
-    setSaveStatus('idle');
+    setSaveStatus(savedPreview ? 'saved' : 'idle');
     setSaveMessage('');
     setPeopleMessage('');
+    setLoadMessage(savedPreview ? `${person.name}님의 사주 정보를 불러왔어요.` : `${person.name}님의 정보를 불러왔어요. 확인하기를 눌러 사주 정보를 볼 수 있어요.`);
     setIsPeopleModalOpen(false);
   };
 
@@ -510,9 +523,7 @@ export default function PeopleClient({ isAuthenticated, initialPeople }: Props) 
   };
 
   return (
-    <div className="flex min-h-screen w-full justify-center bg-[#FEFAF5] text-[#121225]">
-      <div className="relative flex min-h-screen w-full max-w-[430px] flex-col bg-[#FEFAF5] shadow-[0_0_45px_rgba(47,34,17,0.12)]">
-        <main className="flex-1 px-6 pb-28 pt-6">
+    <>
           <header className="flex h-12 items-center justify-between">
             <Link href="/" className="flex h-10 w-10 items-center justify-center rounded-full text-[#171553]">
               <ChevronLeft className="h-7 w-7" strokeWidth={2.2} />
@@ -555,8 +566,8 @@ export default function PeopleClient({ isAuthenticated, initialPeople }: Props) 
           </section>
 
           {isPeopleModalOpen && (
-            <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4" role="dialog" aria-modal="true" aria-labelledby="saved-people-title">
-              <div className="flex max-h-[calc(100vh-48px)] w-full max-w-[390px] flex-col overflow-hidden rounded-[12px] border border-[#ead8c6] bg-[#fffdf9] shadow-[0_24px_70px_rgba(24,17,11,0.28)]">
+            <div className="fixed left-1/2 top-0 z-[80] flex h-dvh w-full max-w-[480px] -translate-x-1/2 items-center justify-center bg-black/45 px-5 py-6" role="dialog" aria-modal="true" aria-labelledby="saved-people-title">
+              <div className="flex max-h-[calc(100dvh-48px)] w-full max-w-[390px] flex-col overflow-hidden rounded-[12px] border border-[#ead8c6] bg-[#fffdf9] shadow-[0_24px_70px_rgba(24,17,11,0.28)]">
                 <div className="shrink-0 flex items-start justify-between gap-4 border-b border-[#eadfd4] px-5 py-4">
                   <div>
                     <h3 id="saved-people-title" className="text-[18px] font-semibold text-[#171553]">저장된 인물 불러오기</h3>
@@ -633,6 +644,16 @@ export default function PeopleClient({ isAuthenticated, initialPeople }: Props) 
                 </div>
               </div>
             </div>
+          )}
+
+          {loadMessage && (
+            <p
+              className="mt-4 rounded-[9px] border border-[#cfe7d2] bg-[#eef8ef] px-3 py-2 text-[13px] leading-[1.55] text-[#357247]"
+              role="status"
+              aria-live="polite"
+            >
+              {loadMessage}
+            </p>
           )}
 
           <form id="person-form" onSubmit={handleSubmit} className="mt-5 space-y-4 scroll-mt-6">
@@ -833,7 +854,7 @@ export default function PeopleClient({ isAuthenticated, initialPeople }: Props) 
                     <section className="rounded-[10px] border border-[#eee2d6] bg-[#fffdf9] px-4 py-4">
                       <div className="flex items-center gap-2">
                         <Compass className="h-4 w-4 text-[#b06b16]" strokeWidth={2} />
-                        <h3 className="text-[15px] font-semibold text-[#2a2018]">오행 균형</h3>
+                        <h3 className="text-[15px] font-semibold text-[#2a2018]">오행 분포도</h3>
                       </div>
 
                       <div className="mt-4 grid grid-cols-[116px_1fr] items-center gap-4">
@@ -857,9 +878,6 @@ export default function PeopleClient({ isAuthenticated, initialPeople }: Props) 
                         </div>
                       </div>
 
-                      <p className="mt-3 break-keep rounded-[8px] bg-[#fbf5ef] px-3 py-3 text-[12px] leading-[1.65] text-[#594b3f]">
-                        {getElementBalanceDescription(elements)}
-                      </p>
                     </section>
                   );
                 })()}
@@ -867,38 +885,17 @@ export default function PeopleClient({ isAuthenticated, initialPeople }: Props) 
                 <section className="grid grid-cols-1 gap-3">
                   {(() => {
                     const currentDaewoon = getCurrentDaewoon(preview.baziResult);
-                    const interactionSummary = getInteractionSummary(preview.baziResult).slice(0, 3);
 
                     return (
-                      <>
-                        <article className="rounded-[10px] border border-[#eee2d6] bg-[#fffdf9] px-4 py-4">
-                          <p className="text-[12px] font-semibold text-[#b06b16]">대운 흐름</p>
-                          <h3 className="mt-1 text-[16px] font-semibold text-[#2a2018]">
-                            {currentDaewoon ? `${currentDaewoon.gan || ''}${currentDaewoon.ji || ''} 대운` : '대운 시작 전'}
-                          </h3>
-                          <p className="mt-2 text-[13px] leading-[1.65] text-[#66594d]">
-                            {preview.baziResult.daewoon?.direction || '-'} · {formatDaewoonRange(currentDaewoon)}
-                          </p>
-                        </article>
-
-                        <article className="rounded-[10px] border border-[#eee2d6] bg-[#fffdf9] px-4 py-4">
-                          <p className="text-[12px] font-semibold text-[#b06b16]">합·충 요약</p>
-                          {interactionSummary.length > 0 ? (
-                            <dl className="mt-2 space-y-1.5">
-                              {interactionSummary.map((item) => (
-                                <div key={`${item.label}-${item.value}`} className="break-keep text-[13px] leading-[1.55] text-[#4f4033]">
-                                  <dt className="inline font-semibold text-[#33281f]">{item.label}</dt>
-                                  <dd className="inline"> · {item.value}</dd>
-                                </div>
-                              ))}
-                            </dl>
-                          ) : (
-                            <p className="mt-2 break-keep text-[13px] leading-[1.65] text-[#66584c]">
-                              표시된 기본 합충 작용이 없습니다. 오행 균형과 십성 배치를 중심으로 살펴보면 좋아요.
-                            </p>
-                          )}
-                        </article>
-                      </>
+                      <article className="rounded-[10px] border border-[#eee2d6] bg-[#fffdf9] px-4 py-4">
+                        <p className="text-[12px] font-semibold text-[#b06b16]">현재 대운</p>
+                        <h3 className="mt-1 text-[16px] font-semibold text-[#2a2018]">
+                          {currentDaewoon ? `${currentDaewoon.gan || ''}${currentDaewoon.ji || ''} 대운` : '대운 시작 전'}
+                        </h3>
+                        <p className="mt-2 text-[13px] leading-[1.65] text-[#66594d]">
+                          {preview.baziResult.daewoon?.direction || '-'} · {formatDaewoonRange(currentDaewoon)}
+                        </p>
+                      </article>
                     );
                   })()}
                 </section>
@@ -960,10 +957,6 @@ export default function PeopleClient({ isAuthenticated, initialPeople }: Props) 
               </div>
             </section>
           )}
-        </main>
-
-        <HomeBottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
-      </div>
-    </div>
+    </>
   );
 }
