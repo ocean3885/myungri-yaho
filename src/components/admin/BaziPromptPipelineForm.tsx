@@ -29,6 +29,10 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
   const [selectedKey, setSelectedKey] = useState(settings[0]?.key || getBaziPromptSettingKey(DEFAULT_BAZI_CONSULTATION_TYPE));
   const [selectedTypeDraft, setSelectedTypeDraft] = useState(settings[0]?.consultationType || DEFAULT_BAZI_CONSULTATION_TYPE);
   const [newConsultationType, setNewConsultationType] = useState('');
+  const [newConsultationName, setNewConsultationName] = useState('');
+  const [newConsultationDescription, setNewConsultationDescription] = useState('');
+  const [newConsultationEnabled, setNewConsultationEnabled] = useState(true);
+  const [newConsultationSortOrder, setNewConsultationSortOrder] = useState(100);
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState<SaveStatus>(null);
 
@@ -65,6 +69,10 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           consultationType: normalizedNewType,
+          name: newConsultationName || normalizedNewType,
+          description: newConsultationDescription,
+          enabled: newConsultationEnabled,
+          sortOrder: newConsultationSortOrder,
           config: nextConfig,
         }),
       });
@@ -77,13 +85,22 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
       const createdSetting: BaziPromptSetting = {
         key: data.key,
         consultationType: data.consultationType,
+        name: data.name,
+        description: data.description,
+        enabled: data.enabled,
+        sortOrder: data.sortOrder,
         config: data.config,
         updatedAt: null,
       };
 
-      setPromptSettings((current) => [...current, createdSetting].sort((a, b) => a.key.localeCompare(b.key)));
+      setPromptSettings((current) => [...current, createdSetting].sort(sortPromptSettings));
       setSelectedKey(createdSetting.key);
+      setSelectedTypeDraft(createdSetting.consultationType);
       setNewConsultationType('');
+      setNewConsultationName('');
+      setNewConsultationDescription('');
+      setNewConsultationEnabled(true);
+      setNewConsultationSortOrder(100);
       setStatus({ type: 'success', message: data.message || '상담종류 프롬프트를 추가했습니다.' });
       router.refresh();
     } catch (error) {
@@ -113,6 +130,10 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
         body: JSON.stringify({
           key: selectedSetting.key,
           intent,
+          name: selectedSetting.name,
+          description: selectedSetting.description,
+          enabled: selectedSetting.enabled,
+          sortOrder: selectedSetting.sortOrder,
           config: nextConfig,
         }),
       });
@@ -124,6 +145,10 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
 
       updateSelectedSetting({
         config: data.config || nextConfig,
+        name: data.name || selectedSetting.name,
+        description: data.description ?? selectedSetting.description,
+        enabled: typeof data.enabled === 'boolean' ? data.enabled : selectedSetting.enabled,
+        sortOrder: typeof data.sortOrder === 'number' ? data.sortOrder : selectedSetting.sortOrder,
         updatedAt: new Date().toISOString(),
       });
       setStatus({ type: 'success', message: data.message || '프롬프트 설정을 저장했습니다.' });
@@ -152,6 +177,10 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
           key: selectedSetting.key,
           intent: 'rename',
           consultationType: normalizedSelectedTypeDraft,
+          name: selectedSetting.name,
+          description: selectedSetting.description,
+          enabled: selectedSetting.enabled,
+          sortOrder: selectedSetting.sortOrder,
           config: formConfig,
         }),
       });
@@ -164,6 +193,10 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
       const renamedSetting: BaziPromptSetting = {
         key: data.key,
         consultationType: data.consultationType,
+        name: data.name || selectedSetting.name,
+        description: data.description ?? selectedSetting.description,
+        enabled: typeof data.enabled === 'boolean' ? data.enabled : selectedSetting.enabled,
+        sortOrder: typeof data.sortOrder === 'number' ? data.sortOrder : selectedSetting.sortOrder,
         config: data.config,
         updatedAt: new Date().toISOString(),
       };
@@ -171,8 +204,9 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
       setPromptSettings((current) => [
         ...current.filter((setting) => setting.key !== selectedSetting.key),
         renamedSetting,
-      ].sort((a, b) => a.key.localeCompare(b.key)));
+      ].sort(sortPromptSettings));
       setSelectedKey(renamedSetting.key);
+      setSelectedTypeDraft(renamedSetting.consultationType);
       setStatus({ type: 'success', message: data.message || '상담종류 key를 변경했습니다.' });
       router.refresh();
     } catch (error) {
@@ -226,7 +260,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
 
     setPromptSettings((current) => current.map((setting) => (
       setting.key === selectedSetting.key ? { ...setting, ...values } : setting
-    )));
+    )).sort(sortPromptSettings));
   }
 
   function updateConfig(values: Partial<BaziPromptPipelineConfig>) {
@@ -271,7 +305,12 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
                   : 'border-[#ead8c6] bg-white text-[#66594d] hover:bg-[#fff8f0]'
               }`}
             >
-              <span className="block text-[15px] font-semibold">{setting.consultationType}</span>
+              <span className="flex items-center justify-between gap-2 text-[15px] font-semibold">
+                <span className="truncate">{setting.name}</span>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] ${setting.enabled ? 'bg-[#eef8ef] text-[#357247]' : 'bg-[#f0ece7] text-[#8a7a68]'}`}>
+                  {setting.enabled ? '사용' : '숨김'}
+                </span>
+              </span>
               <span className="mt-1 block break-all text-[15px] text-[#8a7a68]">{setting.key}</span>
             </button>
           ))}
@@ -287,6 +326,47 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
               className={inputClassName}
             />
           </label>
+          <label className="mt-3 block">
+            <span className="mb-2 block text-[15px] font-semibold text-[#66594d]">표시 이름</span>
+            <input
+              value={newConsultationName}
+              onChange={(event) => setNewConsultationName(event.target.value)}
+              placeholder="예: 연애 상담"
+              className={inputClassName}
+            />
+          </label>
+          <label className="mt-3 block">
+            <span className="mb-2 block text-[15px] font-semibold text-[#66594d]">설명</span>
+            <textarea
+              value={newConsultationDescription}
+              onChange={(event) => setNewConsultationDescription(event.target.value)}
+              rows={3}
+              placeholder="사용자에게 보여줄 상담 설명"
+              className={textareaClassName}
+            />
+          </label>
+          <div className="mt-3 grid grid-cols-[1fr_96px] items-end gap-3">
+            <label className="flex h-11 items-center gap-2 text-[15px] font-semibold text-[#66594d]">
+              <input
+                type="checkbox"
+                checked={newConsultationEnabled}
+                onChange={(event) => setNewConsultationEnabled(event.target.checked)}
+                className="h-4 w-4 rounded border-[#ead8c6]"
+              />
+              사용자 노출
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-[15px] font-semibold text-[#66594d]">순서</span>
+              <input
+                type="number"
+                value={newConsultationSortOrder}
+                onChange={(event) => setNewConsultationSortOrder(Number(event.target.value))}
+                min={0}
+                max={9999}
+                className={inputClassName}
+              />
+            </label>
+          </div>
           <p className="mt-2 break-all text-[15px] leading-[1.5] text-[#8a7a68]">
             생성 key: {newConsultationType.trim() ? newSettingKey : `${BAZI_PROMPT_SETTING_PREFIX}.relationship`}
           </p>
@@ -379,6 +459,44 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
             변경될 key: {selectedTypeDraftKey}
           </p>
         </div>
+
+        {selectedSetting && (
+          <div className="mt-5 rounded-[10px] border border-[#eee2d6] bg-[#fffdf9] px-4 py-4">
+            <h4 className="text-[18px] font-semibold text-[#171553]">상담종류 운영 정보</h4>
+            <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_160px]">
+              <TextInput
+                label="표시 이름"
+                value={selectedSetting.name}
+                onChange={(value) => updateSelectedSetting({ name: value })}
+              />
+              <NumberInput
+                label="정렬 순서"
+                value={selectedSetting.sortOrder}
+                step="1"
+                min="0"
+                max="9999"
+                onChange={(value) => updateSelectedSetting({ sortOrder: value })}
+              />
+            </div>
+            <div className="mt-4">
+              <Textarea
+                label="설명"
+                value={selectedSetting.description || ''}
+                rows={3}
+                onChange={(value) => updateSelectedSetting({ description: value })}
+              />
+            </div>
+            <label className="mt-4 flex h-11 items-center gap-2 text-[15px] font-semibold text-[#66594d]">
+              <input
+                type="checkbox"
+                checked={selectedSetting.enabled}
+                onChange={(event) => updateSelectedSetting({ enabled: event.target.checked })}
+                className="h-4 w-4 rounded border-[#ead8c6]"
+              />
+              사용자 화면에 노출
+            </label>
+          </div>
+        )}
 
         <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_220px_220px_160px]">
           <TextInput
@@ -528,6 +646,11 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
 }
 
 const inputClassName = 'h-11 w-full rounded-[9px] border border-[#ead8c6] bg-white px-3 text-[15px] text-[#111111] outline-none transition focus:border-[#191450]';
+const textareaClassName = 'w-full rounded-[9px] border border-[#ead8c6] bg-white px-3 py-3 text-[15px] leading-[1.6] text-[#111111] outline-none transition focus:border-[#191450]';
+
+function sortPromptSettings(a: BaziPromptSetting, b: BaziPromptSetting) {
+  return a.sortOrder - b.sortOrder || a.key.localeCompare(b.key);
+}
 
 function TextInput({
   label,

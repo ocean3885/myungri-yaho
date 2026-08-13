@@ -1,10 +1,11 @@
 import { revalidatePath } from 'next/cache';
 import type { BaziResult } from '@/components/bazi/types';
 import { createAdminClient } from '@/utils/supabase/server';
+import { getConsultationTypeByKey, type ConsultationType } from '@/lib/consultation-types';
 import { DEEPSEEK_API_URL, DEEPSEEK_MODEL } from '@/lib/deepseek';
 import {
-    buildDefaultBaziPrompt,
     buildStepResultsText,
+    getBaziPromptPipelineConfigBySettingKey,
     getBaziPromptPipelineConfig,
     renderBaziPromptTemplate,
     type BaziGenerationMetadata,
@@ -19,16 +20,19 @@ const COMPACTED_STEP_RESULT_MAX_TOKENS = 1800;
 export async function generateAndStoreBaziInterpretation({
     consultationId,
     result,
+    consultationType,
     revalidatePaths,
 }: {
     consultationId: string;
     result: BaziResult;
+    consultationType?: string;
     revalidatePaths: string[];
 }) {
     const adminSupabase = await createAdminClient();
 
     try {
-        const generation = await runBaziGenerationPipeline(adminSupabase, result);
+        const resolvedType = await getConsultationTypeByKey(adminSupabase, consultationType);
+        const generation = await runBaziGenerationPipeline(adminSupabase, result, resolvedType);
         const { error } = await adminSupabase
             .from('user_consultations')
             .update({
@@ -58,8 +62,17 @@ export async function generateAndStoreBaziInterpretation({
     }
 }
 
-export function buildBaziPrompt(result: BaziResult) {
-    return buildDefaultBaziPrompt(result);
+export async function buildBaziPrompt(
+    adminSupabase: unknown,
+    result: BaziResult,
+    consultationType?: ConsultationType,
+) {
+    const config = consultationType
+        ? await getBaziPromptPipelineConfigBySettingKey(adminSupabase, consultationType.promptSettingKey)
+        : await getBaziPromptPipelineConfig(adminSupabase);
+    const step = config.steps.find((item) => item.enabled) || config.steps[0];
+
+    return renderBaziPromptTemplate(step.userPromptTemplate, result);
 }
 
 export function getKstDateString() {
@@ -71,8 +84,13 @@ export function normalizeSubjectName(value?: string) {
     return name || null;
 }
 
-async function runBaziGenerationPipeline(adminSupabase: any, result: BaziResult) {
-    const config = await getBaziPromptPipelineConfig(adminSupabase);
+async function runBaziGenerationPipeline(adminSupabase: unknown, result: BaziResult, consultationType: ConsultationType) {
+    const config = await getBaziPromptPipelineConfigBySettingKey(adminSupabase, consultationType.promptSettingKey);
+
+    if (!consultationType.enabled || !config.enabled) {
+        throw new Error('현재 사용할 수 없는 상담 프롬프트입니다.');
+    }
+
     const enabledSteps = config.steps.filter((step) => step.enabled);
     const steps = enabledSteps.length > 0 ? enabledSteps : config.steps.slice(0, 1);
     const stepResults = config.executionMode === 'sequential'
@@ -100,6 +118,8 @@ async function runBaziGenerationPipeline(adminSupabase: any, result: BaziResult)
         promptVersion: config.version,
         model: config.model || DEEPSEEK_MODEL,
         generatedAt: new Date().toISOString(),
+        consultationTypeKey: consultationType.key,
+        promptSettingKey: consultationType.promptSettingKey,
         steps: stepResults,
     };
 

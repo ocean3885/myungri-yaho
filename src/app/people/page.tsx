@@ -1,5 +1,6 @@
 import React from 'react';
 import { auth } from '@/auth';
+import { listConsultationTypes, type ConsultationType } from '@/lib/consultation-types';
 import { createAdminClient } from '@/utils/supabase/server';
 import PeopleClient from './PeopleClient';
 import type { SavedPerson } from './PeopleClient';
@@ -7,10 +8,13 @@ import type { SavedPerson } from './PeopleClient';
 export default async function PeoplePage() {
   const session = await auth();
   let initialPeople: SavedPerson[] = [];
+  let consultationTypes: ConsultationType[] = [];
 
-  if (session?.user?.id) {
-    try {
-      const adminSupabase = await createAdminClient();
+  try {
+    const adminSupabase = await createAdminClient();
+    consultationTypes = await listConsultationTypes(adminSupabase, true);
+
+    if (session?.user?.id) {
       const { data, error } = await adminSupabase
         .from('people')
         .select('id, name, relation, gender, calendar, birth_date, birth_time, birth_params, bazi_result, created_at')
@@ -32,10 +36,20 @@ export default async function PeoplePage() {
           createdAt: person.created_at,
         }));
       }
-    } catch (error) {
-      console.error('Failed to load saved people:', error);
     }
+  } catch (error) {
+    console.error('Failed to load people page data:', error);
   }
 
-  return <PeopleClient isAuthenticated={Boolean(session?.user?.id)} initialPeople={initialPeople} />;
+  return (
+    <PeopleClient
+      isAuthenticated={Boolean(session?.user?.id)}
+      initialPeople={initialPeople}
+      consultationTypes={consultationTypes.map((type) => ({
+        key: type.key,
+        name: type.name,
+        description: type.description,
+      }))}
+    />
+  );
 }

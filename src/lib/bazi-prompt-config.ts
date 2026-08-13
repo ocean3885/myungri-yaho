@@ -44,6 +44,8 @@ export type BaziGenerationMetadata = {
     promptVersion: string;
     model: string;
     generatedAt: string;
+    consultationTypeKey?: string;
+    promptSettingKey?: string;
     steps: BaziPromptStepResult[];
 };
 
@@ -71,9 +73,36 @@ type SettingsListResult = {
     error: { message?: string } | null;
 };
 
+type ConsultationTypesQueryClient = {
+    from: (table: 'consultation_types') => {
+        select: (columns: string) => {
+            order: (column: 'sort_order', options: { ascending: boolean }) => {
+                order: (column: 'key', options: { ascending: boolean }) => Promise<ConsultationTypesListResult>;
+            };
+        };
+    };
+};
+
+type ConsultationTypesListResult = {
+    data: Array<{
+        key: string;
+        name?: string | null;
+        description?: string | null;
+        prompt_setting_key?: string | null;
+        enabled?: boolean | null;
+        sort_order?: number | null;
+        updated_at?: string | null;
+    }> | null;
+    error: { message?: string } | null;
+};
+
 export type BaziPromptSetting = {
     key: string;
     consultationType: string;
+    name: string;
+    description: string | null;
+    enabled: boolean;
+    sortOrder: number;
     config: BaziPromptPipelineConfig;
     updatedAt: string | null;
 };
@@ -202,8 +231,17 @@ export async function getBaziPromptPipelineConfig(
     adminSupabase: unknown,
     consultationType: string = DEFAULT_BAZI_CONSULTATION_TYPE,
 ) {
+    return getBaziPromptPipelineConfigBySettingKey(
+        adminSupabase,
+        getBaziPromptSettingKey(consultationType),
+    );
+}
+
+export async function getBaziPromptPipelineConfigBySettingKey(
+    adminSupabase: unknown,
+    settingKey: string = DEFAULT_BAZI_PROMPT_SETTING_KEY,
+) {
     const settingsClient = adminSupabase as SettingsQueryClient;
-    const settingKey = getBaziPromptSettingKey(consultationType);
     const { data, error } = await settingsClient
         .from('service_settings')
         .select('value')
@@ -232,25 +270,50 @@ export async function getBaziPromptPipelineConfig(
 
 export async function listBaziPromptSettings(adminSupabase: unknown): Promise<BaziPromptSetting[]> {
     const settingsClient = adminSupabase as SettingsQueryClient;
-    const { data, error } = await settingsClient
+    const consultationTypesClient = adminSupabase as ConsultationTypesQueryClient;
+    const [{ data, error }, consultationTypesResult] = await Promise.all([
+        settingsClient
         .from('service_settings')
         .select('key, value, updated_at')
         .like('key', `${BAZI_PROMPT_SETTING_PREFIX}.%`)
-        .order('key', { ascending: true });
+            .order('key', { ascending: true }),
+        consultationTypesClient
+            .from('consultation_types')
+            .select('key, name, description, prompt_setting_key, enabled, sort_order, updated_at')
+            .order('sort_order', { ascending: true })
+            .order('key', { ascending: true }),
+    ]);
 
     if (error) {
         console.error('Bazi prompt settings list query error:', error);
         return [getDefaultBaziPromptSetting()];
     }
 
+    if (consultationTypesResult.error) {
+        console.error('Consultation type metadata list query error:', consultationTypesResult.error);
+    }
+
+    const consultationTypesByPromptKey = new Map((consultationTypesResult.data || [])
+        .map((item) => [item.prompt_setting_key || getBaziPromptSettingKey(item.key), item]));
+
     const settings = (data || [])
         .filter((item) => isBaziPromptSettingKey(item.key))
-        .map((item) => ({
-            key: item.key,
-            consultationType: getBaziConsultationTypeFromSettingKey(item.key),
-            config: normalizeBaziPromptPipelineConfig(item.value),
-            updatedAt: item.updated_at || null,
-        }));
+        .map((item) => {
+            const consultationType = getBaziConsultationTypeFromSettingKey(item.key);
+            const consultationTypeMeta = consultationTypesByPromptKey.get(item.key);
+
+            return {
+                key: item.key,
+                consultationType,
+                name: consultationTypeMeta?.name || getDefaultConsultationTypeName(consultationType),
+                description: consultationTypeMeta?.description || null,
+                enabled: consultationTypeMeta?.enabled !== false,
+                sortOrder: consultationTypeMeta?.sort_order ?? 100,
+                config: normalizeBaziPromptPipelineConfig(item.value),
+                updatedAt: consultationTypeMeta?.updated_at || item.updated_at || null,
+            };
+        })
+        .sort((a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key));
 
     if (settings.length > 0) {
         return settings;
@@ -267,9 +330,17 @@ export function getDefaultBaziPromptSetting(): BaziPromptSetting {
     return {
         key: DEFAULT_BAZI_PROMPT_SETTING_KEY,
         consultationType: DEFAULT_BAZI_CONSULTATION_TYPE,
+        name: getDefaultConsultationTypeName(DEFAULT_BAZI_CONSULTATION_TYPE),
+        description: '사주 원국을 바탕으로 기본 성향과 현재 운 흐름을 해석합니다.',
+        enabled: true,
+        sortOrder: 10,
         config: defaultBaziPromptPipelineConfig,
         updatedAt: null,
     };
+}
+
+function getDefaultConsultationTypeName(consultationType: string) {
+    return consultationType === DEFAULT_BAZI_CONSULTATION_TYPE ? '기본 상담' : consultationType;
 }
 
 export function normalizeBaziPromptPipelineConfig(value: unknown): BaziPromptPipelineConfig {

@@ -10,11 +10,11 @@ type Props = {
   children: ReactNode;
 };
 
-const shellRoutes = new Set(['/', '/people', '/my']);
+const shellRoutes = new Set(['/', '/people', '/archive', '/my']);
 
 export default function HomeAppShell({ children }: Props) {
   const pathname = usePathname();
-  const shouldUseShell = shellRoutes.has(pathname);
+  const shouldUseShell = shellRoutes.has(pathname) || pathname.startsWith('/archive/');
 
   if (!shouldUseShell) {
     return children;

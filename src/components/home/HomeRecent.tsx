@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { ChevronRight, FileText, Heart } from 'lucide-react';
 
 type ConsultationItem = {
@@ -19,6 +20,7 @@ export default function HomeRecent({ consultations }: Props) {
   const fallbackConsultations = [
     {
       id: 'sample-basic',
+      href: '/people',
       subject_name: '김명리',
       title: '기본 사주 분석',
       tags: '신중함 · 책임감 · 독립성',
@@ -28,6 +30,7 @@ export default function HomeRecent({ consultations }: Props) {
     },
     {
       id: 'sample-love',
+      href: '/people',
       subject_name: '박야호',
       title: '연애 성향 상담',
       tags: '배려심 · 현실감 · 따뜻함',
@@ -39,6 +42,7 @@ export default function HomeRecent({ consultations }: Props) {
 
   const visibleConsultations = consultations.slice(0, 2).map((item, index) => ({
     id: item.id,
+    href: `/archive/${item.id}`,
     subject_name: item.subject_name || (index === 0 ? '김명리' : '박야호'),
     title: index === 0 ? '기본 사주 분석' : '연애 성향 상담',
     tags: item.result_text || (index === 0 ? '신중함 · 책임감 · 독립성' : '배려심 · 현실감 · 따뜻함'),
@@ -53,14 +57,13 @@ export default function HomeRecent({ consultations }: Props) {
     <section className="mt-6">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-[18px] font-semibold text-[#111111]">최근 상담 기록</h3>
-        <button
-          type="button"
-          onClick={() => alert('전체 상담 목록 페이지를 준비 중입니다.')}
+        <Link
+          href="/archive"
           className="flex items-center text-[14px] font-medium text-[#171553]"
         >
           <span>전체 보기</span>
           <ChevronRight className="h-5 w-5" />
-        </button>
+        </Link>
       </div>
 
       <div className="overflow-hidden rounded-[12px] border border-[#ead8c6] bg-white shadow-[0_8px_24px_rgba(92,61,25,0.05)]">
@@ -69,10 +72,9 @@ export default function HomeRecent({ consultations }: Props) {
           const isCoral = item.tone === 'coral';
 
           return (
-            <button
+            <Link
               key={item.id}
-              type="button"
-              onClick={() => alert(`${item.subject_name}님의 ${item.title}을 준비 중입니다.`)}
+              href={item.href}
               className={`flex min-h-[78px] w-full items-center gap-4 px-4 py-3 text-left ${
                 index > 0 ? 'border-t border-[#f0e4d8]' : ''
               }`}
@@ -96,7 +98,7 @@ export default function HomeRecent({ consultations }: Props) {
                 </span>
               </span>
               <ChevronRight className="h-7 w-7 shrink-0 text-[#171553] stroke-[2.4]" />
-            </button>
+            </Link>
           );
         })}
       </div>

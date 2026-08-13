@@ -2,6 +2,7 @@ import { after, NextRequest, NextResponse } from 'next/server';
 import type { BaziResult } from '@/components/bazi/types';
 import { createAdminClient } from '@/utils/supabase/server';
 import { auth } from '@/auth';
+import { getConsultationTypeByKey } from '@/lib/consultation-types';
 import {
     buildBaziPrompt,
     generateAndStoreBaziInterpretation,
@@ -27,7 +28,12 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    let body: { result?: BaziResult; subjectName?: string; birthParams?: BaziResult['birth_params'] };
+    let body: {
+        result?: BaziResult;
+        subjectName?: string;
+        birthParams?: BaziResult['birth_params'];
+        consultationType?: string;
+    };
 
     try {
         body = await request.json();
@@ -48,36 +54,25 @@ export async function POST(request: NextRequest) {
     try {
         const requestDateKst = getKstDateString();
         const adminSupabase = await createAdminClient();
+        const consultationType = await getConsultationTypeByKey(adminSupabase, body.consultationType);
 
-        const isAdminOrStaff = (user as any).role === 'admin' || (user as any).role === 'staff';
-
-        if (!isAdminOrStaff) {
-            // For standard users, enforce the strict 1-day 1-time limit
-            const { data: existingRequest, error: existingRequestError } = await adminSupabase
-                .from('user_consultations')
-                .select('id')
-                .eq('user_id', user.id)
-                .eq('request_date_kst', requestDateKst)
-                .maybeSingle();
-
-            if (existingRequestError) throw existingRequestError;
-
-            if (existingRequest) {
-                return NextResponse.json(
-                    { message: '무료 사주 원국 해설은 하루 1회 신청할 수 있습니다. 마이페이지에서 오늘 신청한 해설을 확인해주세요.' },
-                    { status: 409 },
-                );
-            }
+        if (!consultationType.enabled) {
+            return NextResponse.json(
+                { message: '현재 사용할 수 없는 상담종류입니다.' },
+                { status: 400 },
+            );
         }
 
         const subjectName = normalizeSubjectName(body.subjectName);
-        const prompt = buildBaziPrompt(body.result);
+        const prompt = await buildBaziPrompt(adminSupabase, body.result, consultationType);
         const { data: consultation, error: insertError } = await adminSupabase
             .from('user_consultations')
             .insert({
                 user_id: user.id,
                 subject_name: subjectName,
                 request_date_kst: requestDateKst,
+                consultation_type_key: consultationType.key,
+                prompt_setting_key: consultationType.promptSettingKey,
                 bazi_result: {
                     ...body.result,
                     birth_params: body.birthParams,
@@ -95,18 +90,19 @@ export async function POST(request: NextRequest) {
             await generateAndStoreBaziInterpretation({
                 consultationId: consultation.id,
                 result: body.result!,
+                consultationType: consultationType.key,
                 revalidatePaths: ['/profile', '/my/bazi-consultations'],
             });
         });
 
         return NextResponse.json({
-            message: '무료 사주 원국 해설 신청이 접수되었습니다. 해설은 분석이 완료되는 대로 마이페이지에 표시됩니다.',
+            message: '상담 신청이 접수되었습니다. 해설은 분석이 완료되는 대로 보관함에 표시됩니다.',
             id: consultation.id,
         });
     } catch (error) {
         console.error('Free bazi consultation failed:', error);
         return NextResponse.json(
-            { message: error instanceof Error ? error.message : '무료 해설 신청에 실패했습니다.' },
+            { message: error instanceof Error ? error.message : '상담 신청에 실패했습니다.' },
             { status: 502 },
         );
     }

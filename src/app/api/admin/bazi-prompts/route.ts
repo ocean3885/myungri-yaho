@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminAccess } from '@/lib/admin-access';
 import {
   defaultBaziPromptPipelineConfig,
+  DEFAULT_BAZI_CONSULTATION_TYPE,
   getBaziPromptSettingKey,
   getBaziConsultationTypeFromSettingKey,
   isBaziPromptSettingKey,
@@ -15,6 +16,10 @@ type UpdateBody = {
   intent?: string;
   key?: unknown;
   consultationType?: unknown;
+  name?: unknown;
+  description?: unknown;
+  enabled?: unknown;
+  sortOrder?: unknown;
   config?: unknown;
 };
 
@@ -47,10 +52,15 @@ export async function POST(request: NextRequest) {
   }
 
   const key = getBaziPromptSettingKey(body.consultationType);
+  const consultationType = getBaziConsultationTypeFromSettingKey(key);
   const value = normalizeBaziPromptPipelineConfig(body.config || {
     ...defaultBaziPromptPipelineConfig,
-    version: `${getBaziConsultationTypeFromSettingKey(key)}-v1`,
+    version: `${consultationType}-v1`,
   });
+  const name = normalizeConsultationTypeName(body.name, consultationType);
+  const description = normalizeOptionalText(body.description);
+  const enabled = typeof body.enabled === 'boolean' ? body.enabled : true;
+  const sortOrder = normalizeSortOrder(body.sortOrder);
 
   try {
     const adminSupabase = await createAdminClient();
@@ -79,12 +89,30 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error;
 
+    const { error: consultationTypeError } = await adminSupabase
+      .from('consultation_types')
+      .upsert({
+        key: consultationType,
+        name,
+        description,
+        prompt_setting_key: key,
+        enabled,
+        sort_order: sortOrder,
+        updated_at: new Date().toISOString(),
+      });
+
+    if (consultationTypeError) throw consultationTypeError;
+
     revalidatePath('/admin/bazi-prompts');
 
     return NextResponse.json({
       message: '상담종류 프롬프트를 추가했습니다.',
       key,
-      consultationType: getBaziConsultationTypeFromSettingKey(key),
+      consultationType,
+      name,
+      description,
+      enabled,
+      sortOrder,
       config: value,
     });
   } catch (error) {
@@ -135,6 +163,8 @@ export async function PATCH(request: NextRequest) {
     }
 
     const nextKey = getBaziPromptSettingKey(body.consultationType);
+    const previousConsultationType = getBaziConsultationTypeFromSettingKey(body.key);
+    const nextConsultationType = getBaziConsultationTypeFromSettingKey(nextKey);
 
     if (nextKey === body.key) {
       return NextResponse.json(
@@ -144,6 +174,10 @@ export async function PATCH(request: NextRequest) {
     }
 
     const value = normalizeBaziPromptPipelineConfig(body.config);
+    const name = normalizeConsultationTypeName(body.name, nextConsultationType);
+    const description = normalizeOptionalText(body.description);
+    const enabled = typeof body.enabled === 'boolean' ? body.enabled : true;
+    const sortOrder = normalizeSortOrder(body.sortOrder);
 
     try {
       const adminSupabase = await createAdminClient();
@@ -179,12 +213,39 @@ export async function PATCH(request: NextRequest) {
 
       if (deleteError) throw deleteError;
 
+      const { error: consultationTypeError } = await adminSupabase
+        .from('consultation_types')
+        .upsert({
+          key: nextConsultationType,
+          name,
+          description,
+          prompt_setting_key: nextKey,
+          enabled,
+          sort_order: sortOrder,
+          updated_at: new Date().toISOString(),
+        });
+
+      if (consultationTypeError) throw consultationTypeError;
+
+      if (previousConsultationType !== nextConsultationType) {
+        const { error: previousTypeDeleteError } = await adminSupabase
+          .from('consultation_types')
+          .delete()
+          .eq('key', previousConsultationType);
+
+        if (previousTypeDeleteError) throw previousTypeDeleteError;
+      }
+
       revalidatePath('/admin/bazi-prompts');
 
       return NextResponse.json({
         message: '상담종류 key를 변경했습니다.',
         key: nextKey,
-        consultationType: getBaziConsultationTypeFromSettingKey(nextKey),
+        consultationType: nextConsultationType,
+        name,
+        description,
+        enabled,
+        sortOrder,
         config: value,
       });
     } catch (error) {
@@ -215,12 +276,35 @@ export async function PATCH(request: NextRequest) {
 
     if (error) throw error;
 
+    const consultationType = getBaziConsultationTypeFromSettingKey(body.key);
+    const name = normalizeConsultationTypeName(body.name, consultationType);
+    const description = normalizeOptionalText(body.description);
+    const enabled = typeof body.enabled === 'boolean' ? body.enabled : true;
+    const sortOrder = normalizeSortOrder(body.sortOrder);
+    const { error: consultationTypeError } = await adminSupabase
+      .from('consultation_types')
+      .upsert({
+        key: consultationType,
+        name,
+        description,
+        prompt_setting_key: body.key,
+        enabled,
+        sort_order: sortOrder,
+        updated_at: new Date().toISOString(),
+      });
+
+    if (consultationTypeError) throw consultationTypeError;
+
     revalidatePath('/admin/bazi-prompts');
 
     return NextResponse.json({
       message: intent === 'reset' ? '기본 프롬프트 설정으로 복원했습니다.' : '프롬프트 설정을 저장했습니다.',
       key: body.key,
-      consultationType: getBaziConsultationTypeFromSettingKey(body.key),
+      consultationType,
+      name,
+      description,
+      enabled,
+      sortOrder,
       config: value,
     });
   } catch (error) {
@@ -260,6 +344,13 @@ export async function DELETE(request: NextRequest) {
 
     if (error) throw error;
 
+    const { error: consultationTypeError } = await adminSupabase
+      .from('consultation_types')
+      .delete()
+      .eq('key', getBaziConsultationTypeFromSettingKey(key));
+
+    if (consultationTypeError) throw consultationTypeError;
+
     revalidatePath('/admin/bazi-prompts');
 
     return NextResponse.json({
@@ -273,4 +364,24 @@ export async function DELETE(request: NextRequest) {
       { status: 502 },
     );
   }
+}
+
+function normalizeConsultationTypeName(value: unknown, fallbackKey: string) {
+  if (typeof value === 'string' && value.trim()) return value.trim().slice(0, 100);
+  if (fallbackKey === DEFAULT_BAZI_CONSULTATION_TYPE) return '기본 상담';
+
+  return fallbackKey;
+}
+
+function normalizeOptionalText(value: unknown) {
+  if (typeof value !== 'string') return null;
+  const text = value.trim().slice(0, 500);
+  return text || null;
+}
+
+function normalizeSortOrder(value: unknown) {
+  const number = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(number)) return 100;
+
+  return Math.floor(Math.min(9999, Math.max(0, number)));
 }

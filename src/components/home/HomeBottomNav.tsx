@@ -7,7 +7,7 @@ import { Archive, Home as HomeIcon, User, UserRound } from 'lucide-react';
 export default function HomeBottomNav() {
   const router = useRouter();
   const pathname = usePathname();
-  const activeTab = pathname === '/people' ? 'people' : pathname === '/my' ? 'my' : 'home';
+  const activeTab = pathname === '/people' ? 'people' : pathname.startsWith('/archive') ? 'archive' : pathname === '/my' ? 'my' : 'home';
 
   const itemClass = (tab: string) =>
     `relative flex cursor-pointer flex-col items-center transition ${
@@ -44,7 +44,7 @@ export default function HomeBottomNav() {
 
       <button
         onClick={() => {
-          alert('보관함 기능 페이지를 준비 중입니다.');
+          router.push('/archive');
         }}
         className={itemClass('archive')}
       >
