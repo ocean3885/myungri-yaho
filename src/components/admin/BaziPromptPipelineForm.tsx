@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 
 import {
+  BAZI_PROMPT_MAX_TOKENS_LIMIT,
   BAZI_PROMPT_SETTING_PREFIX,
   DEFAULT_BAZI_CONSULTATION_TYPE,
   getBaziPromptSettingKey,
@@ -45,6 +46,10 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
   const selectedTypeDraftKey = getBaziPromptSettingKey(normalizedSelectedTypeDraft);
   const normalizedNewType = normalizeBaziConsultationType(newConsultationType);
   const newSettingKey = getBaziPromptSettingKey(normalizedNewType);
+  const pipelineEnabled = formConfig.enabled;
+  const singleStepIndex = formConfig.steps.findIndex((step) => step.enabled) >= 0
+    ? formConfig.steps.findIndex((step) => step.enabled)
+    : 0;
   const canRename = Boolean(selectedSetting)
     && selectedTypeDraft.trim().length > 0
     && selectedTypeDraftKey !== selectedSetting?.key
@@ -391,7 +396,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
               여러 분석 프롬프트를 실행한 뒤 최종 편집 프롬프트에서 하나의 상담문으로 통합합니다.
             </p>
             <p className="mt-2 max-w-5xl text-[15px] leading-[1.6] text-[#8a7a68]">
-              사용 가능 변수: {'{{baziSummary}}'}, {'{{gender}}'}, {'{{yearPillar}}'}, {'{{monthPillar}}'}, {'{{dayPillar}}'}, {'{{timePillar}}'}, {'{{currentYear}}'}, {'{{previousDaewoon}}'}, {'{{previousDaewoonYearRange}}'}, {'{{currentDaewoon}}'}, {'{{currentDaewoonYearRange}}'}, {'{{nextDaewoon}}'}, {'{{nextDaewoonYearRange}}'}, {'{{currentSewoon}}'}, {'{{previousStepResults}}'}, {'{{stepResults}}'}
+              사용 가능 변수: {'{{baziJson}}'}, {'{{baziSummary}}'}, {'{{gender}}'}, {'{{yearPillar}}'}, {'{{monthPillar}}'}, {'{{dayPillar}}'}, {'{{timePillar}}'}, {'{{currentYear}}'}, {'{{previousDaewoon}}'}, {'{{previousDaewoonYearRange}}'}, {'{{currentDaewoon}}'}, {'{{currentDaewoonYearRange}}'}, {'{{nextDaewoon}}'}, {'{{nextDaewoonYearRange}}'}, {'{{currentSewoon}}'}, {'{{previousStepResults}}'}, {'{{stepResults}}'}
             </p>
           </div>
 
@@ -516,6 +521,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
               onChange={(event) => updateConfig({
                 executionMode: event.target.value === 'sequential' ? 'sequential' : 'parallel',
               })}
+              disabled={!pipelineEnabled}
               className={inputClassName}
             >
               <option value="parallel">병렬 실행</option>
@@ -535,17 +541,24 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
 
         <div className="mt-5 grid gap-4">
           {formConfig.steps.map((step, index) => (
-            <section key={`${step.key}-${index}`} className="rounded-[10px] border border-[#eee2d6] bg-[#fffdf9] px-4 py-4">
+            <section
+              key={`${step.key}-${index}`}
+              className={`rounded-[10px] border border-[#eee2d6] px-4 py-4 transition ${
+                !pipelineEnabled && index !== singleStepIndex ? 'bg-[#f7f3ee] opacity-60' : 'bg-[#fffdf9]'
+              }`}
+            >
               <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                 <div className="grid flex-1 gap-3 md:grid-cols-[200px_1fr]">
                   <TextInput
                     label="단계 키"
                     value={step.key}
+                    disabled={!pipelineEnabled && index !== singleStepIndex}
                     onChange={(value) => updateStep(index, { key: value })}
                   />
                   <TextInput
                     label="단계 이름"
                     value={step.label}
+                    disabled={!pipelineEnabled && index !== singleStepIndex}
                     onChange={(value) => updateStep(index, { label: value })}
                   />
                 </div>
@@ -553,10 +566,11 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
                   <input
                     type="checkbox"
                     checked={step.enabled}
+                    disabled={!pipelineEnabled && index !== singleStepIndex}
                     onChange={(event) => updateStep(index, { enabled: event.target.checked })}
                     className="h-4 w-4 rounded border-[#ead8c6]"
                   />
-                  사용
+                  {!pipelineEnabled && index === singleStepIndex ? '단일 실행' : '사용'}
                 </label>
               </div>
 
@@ -565,12 +579,14 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
                   label="System Prompt"
                   value={step.systemPrompt}
                   rows={7}
+                  disabled={!pipelineEnabled && index !== singleStepIndex}
                   onChange={(value) => updateStep(index, { systemPrompt: value })}
                 />
                 <Textarea
                   label="User Prompt Template"
                   value={step.userPromptTemplate}
                   rows={7}
+                  disabled={!pipelineEnabled && index !== singleStepIndex}
                   onChange={(value) => updateStep(index, { userPromptTemplate: value })}
                 />
               </div>
@@ -582,6 +598,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
                   step="0.05"
                   min="0"
                   max="2"
+                  disabled={!pipelineEnabled && index !== singleStepIndex}
                   onChange={(value) => updateStep(index, { temperature: value })}
                 />
                 <NumberInput
@@ -589,7 +606,8 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
                   value={step.maxTokens}
                   step="100"
                   min="256"
-                  max="8000"
+                  max={String(BAZI_PROMPT_MAX_TOKENS_LIMIT)}
+                  disabled={!pipelineEnabled && index !== singleStepIndex}
                   onChange={(value) => updateStep(index, { maxTokens: value })}
                 />
               </div>
@@ -597,13 +615,14 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
           ))}
         </div>
 
-        <section className="mt-5 rounded-[10px] border border-[#eee2d6] bg-[#fffdf9] px-4 py-4">
+        <section className={`mt-5 rounded-[10px] border border-[#eee2d6] px-4 py-4 transition ${pipelineEnabled ? 'bg-[#fffdf9]' : 'bg-[#f7f3ee] opacity-60'}`}>
           <h4 className="text-[22px] font-semibold text-[#171553]">최종 통합 편집</h4>
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <Textarea
               label="Finalize System Prompt"
               value={formConfig.finalize.systemPrompt}
               rows={7}
+              disabled={!pipelineEnabled}
               onChange={(value) => updateConfig({
                 finalize: { ...formConfig.finalize, systemPrompt: value },
               })}
@@ -612,6 +631,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
               label="Finalize User Prompt Template"
               value={formConfig.finalize.userPromptTemplate}
               rows={7}
+              disabled={!pipelineEnabled}
               onChange={(value) => updateConfig({
                 finalize: { ...formConfig.finalize, userPromptTemplate: value },
               })}
@@ -624,6 +644,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
               step="0.05"
               min="0"
               max="2"
+              disabled={!pipelineEnabled}
               onChange={(value) => updateConfig({
                 finalize: { ...formConfig.finalize, temperature: value },
               })}
@@ -633,7 +654,8 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
               value={formConfig.finalize.maxTokens}
               step="100"
               min="256"
-              max="8000"
+              max={String(BAZI_PROMPT_MAX_TOKENS_LIMIT)}
+              disabled={!pipelineEnabled}
               onChange={(value) => updateConfig({
                 finalize: { ...formConfig.finalize, maxTokens: value },
               })}
@@ -655,10 +677,12 @@ function sortPromptSettings(a: BaziPromptSetting, b: BaziPromptSetting) {
 function TextInput({
   label,
   value,
+  disabled = false,
   onChange,
 }: {
   label: string;
   value: string;
+  disabled?: boolean;
   onChange: (value: string) => void;
 }) {
   return (
@@ -666,6 +690,7 @@ function TextInput({
       <span className="mb-2 block text-[15px] font-semibold text-[#66594d]">{label}</span>
       <input
         value={value}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         className={inputClassName}
       />
@@ -679,6 +704,7 @@ function NumberInput({
   min,
   max,
   step,
+  disabled = false,
   onChange,
 }: {
   label: string;
@@ -686,6 +712,7 @@ function NumberInput({
   min: string;
   max: string;
   step: string;
+  disabled?: boolean;
   onChange: (value: number) => void;
 }) {
   return (
@@ -697,6 +724,7 @@ function NumberInput({
         max={max}
         step={step}
         value={value}
+        disabled={disabled}
         onChange={(event) => onChange(Number(event.target.value))}
         className={inputClassName}
       />
@@ -708,11 +736,13 @@ function Textarea({
   label,
   value,
   rows,
+  disabled = false,
   onChange,
 }: {
   label: string;
   value: string;
   rows: number;
+  disabled?: boolean;
   onChange: (value: string) => void;
 }) {
   return (
@@ -721,6 +751,7 @@ function Textarea({
       <textarea
         value={value}
         rows={rows}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         className="w-full resize-y rounded-[9px] border border-[#ead8c6] bg-white px-3 py-3 font-mono text-[15px] leading-7 text-[#111111] outline-none transition focus:border-[#191450]"
       />

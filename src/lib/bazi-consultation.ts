@@ -87,12 +87,37 @@ export function normalizeSubjectName(value?: string) {
 async function runBaziGenerationPipeline(adminSupabase: unknown, result: BaziResult, consultationType: ConsultationType) {
     const config = await getBaziPromptPipelineConfigBySettingKey(adminSupabase, consultationType.promptSettingKey);
 
-    if (!consultationType.enabled || !config.enabled) {
+    if (!consultationType.enabled) {
         throw new Error('현재 사용할 수 없는 상담 프롬프트입니다.');
     }
 
     const enabledSteps = config.steps.filter((step) => step.enabled);
     const steps = enabledSteps.length > 0 ? enabledSteps : config.steps.slice(0, 1);
+
+    if (!config.enabled) {
+        const singleStep = steps[0];
+        const userPrompt = renderBaziPromptTemplate(singleStep.userPromptTemplate, result);
+        const stepResult = await runBaziAnalysisStep(singleStep, config, result);
+
+        if (!stepResult.ok || !stepResult.content.trim()) {
+            throw new Error(stepResult.error || '사주 해설 분석 단계가 실패했습니다.');
+        }
+
+        return {
+            interpretation: stepResult.content,
+            prompt: userPrompt,
+            promptVersion: config.version,
+            metadata: {
+                promptVersion: config.version,
+                model: config.model || DEEPSEEK_MODEL,
+                generatedAt: new Date().toISOString(),
+                consultationTypeKey: consultationType.key,
+                promptSettingKey: consultationType.promptSettingKey,
+                steps: [stepResult],
+            },
+        };
+    }
+
     const stepResults = config.executionMode === 'sequential'
         ? await runSequentialBaziAnalysisSteps(steps, config, result)
         : await Promise.all(steps.map((step) => runBaziAnalysisStep(step, config, result)));
@@ -273,8 +298,31 @@ async function requestDeepSeekCompletion({
         throw new Error('사주 원국 해설 생성에 실패했습니다.');
     }
 
-    const content = data?.choices?.[0]?.message?.content;
+    const choice = data?.choices?.[0];
+    const content = choice?.message?.content;
     if (typeof content !== 'string' || !content.trim()) {
+        const finishReason = choice?.finish_reason;
+        const reasoningTokens = data?.usage?.completion_tokens_details?.reasoning_tokens;
+        const reasoningContent = choice?.message?.reasoning_content;
+
+        console.error(errorLabel, {
+            reason: 'empty_content',
+            finishReason,
+            reasoningTokens,
+            hasReasoningContent: typeof reasoningContent === 'string' && Boolean(reasoningContent.trim()),
+            contentPreview: typeof content === 'string' ? content.slice(0, 300) : null,
+            reasoningContentPreview: typeof reasoningContent === 'string' ? reasoningContent.slice(0, 300) : null,
+            usage: data?.usage,
+        });
+
+        if (finishReason === 'length' && Number(reasoningTokens) > 0) {
+            throw new Error('DeepSeek이 추론 과정에서 토큰 한도를 모두 사용해 최종 해설을 생성하지 못했습니다. Max Tokens를 늘리거나 프롬프트를 더 짧게 조정해 주세요.');
+        }
+
+        if (typeof reasoningContent === 'string' && reasoningContent.trim()) {
+            throw new Error('DeepSeek이 추론 내용만 반환하고 최종 해설을 반환하지 않았습니다. Max Tokens를 늘리거나 프롬프트에 최종 답변을 짧게 작성하도록 조정해 주세요.');
+        }
+
         throw new Error('생성된 해설이 비어 있습니다.');
     }
 

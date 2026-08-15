@@ -5,6 +5,7 @@ export const BAZI_PROMPT_SETTING_PREFIX = 'prompt.bazi';
 export const DEFAULT_BAZI_CONSULTATION_TYPE = 'free_basic';
 export const LEGACY_BAZI_PROMPT_SETTING_KEY = 'bazi_free_consultation_prompt_pipeline';
 export const DEFAULT_BAZI_PROMPT_SETTING_KEY = getBaziPromptSettingKey(DEFAULT_BAZI_CONSULTATION_TYPE);
+export const BAZI_PROMPT_MAX_TOKENS_LIMIT = 16000;
 
 export type BaziPromptStepConfig = {
     key: string;
@@ -109,7 +110,7 @@ export type BaziPromptSetting = {
 
 export const defaultBaziPromptPipelineConfig: BaziPromptPipelineConfig = {
     enabled: true,
-    version: 'free-bazi-rich-v1',
+    version: 'free-bazi-json-v1',
     model: DEEPSEEK_MODEL,
     executionMode: 'parallel',
     steps: [
@@ -119,7 +120,8 @@ export const defaultBaziPromptPipelineConfig: BaziPromptPipelineConfig = {
             enabled: true,
             systemPrompt: '당신은 한국어로 사주 원국의 구조, 월령, 일간의 힘, 오행 흐름을 정밀하게 해석하는 명리학 상담사입니다. 운명 단정, 공포 조장, 건강/투자/법률 확정 조언은 피합니다.',
             userPromptTemplate: [
-                '{{baziSummary}}',
+                '만세력 JSON입니다. pillars=[천간,지지], daewoon=[천간,지지,시작연도,종료연도,시작나이,종료나이], sewoon=[연도,천간,지지]입니다. JSON 값을 우선 근거로 삼고, 없는 정보는 추측하지 마세요.',
+                '{{baziJson}}',
                 '',
                 '위 명식의 원국 구조를 깊이 있게 분석해 주세요.',
                 '일간의 상태, 월령의 작용, 오행의 흐름, 사주 네 기둥의 상호작용을 중심으로 설명합니다.',
@@ -135,7 +137,8 @@ export const defaultBaziPromptPipelineConfig: BaziPromptPipelineConfig = {
             enabled: true,
             systemPrompt: '당신은 사주 원국을 바탕으로 성향, 사고방식, 감정 표현, 대인관계 패턴을 현실적으로 설명하는 한국어 상담사입니다.',
             userPromptTemplate: [
-                '{{baziSummary}}',
+                '만세력 JSON입니다. pillars=[천간,지지], daewoon=[천간,지지,시작연도,종료연도,시작나이,종료나이], sewoon=[연도,천간,지지]입니다. JSON 값을 우선 근거로 삼고, 없는 정보는 추측하지 마세요.',
+                '{{baziJson}}',
                 '',
                 '위 명식에서 드러나는 성향, 사고방식, 대인관계 흐름을 분석해 주세요.',
                 '장점과 보완점을 균형 있게 설명하고, 단정적 성격 규정은 피합니다.',
@@ -150,7 +153,8 @@ export const defaultBaziPromptPipelineConfig: BaziPromptPipelineConfig = {
             enabled: true,
             systemPrompt: '당신은 사주 원국의 십신, 오행, 궁위 흐름을 바탕으로 적성, 일 처리 방식, 사회적 역할을 분석하는 한국어 명리 상담사입니다.',
             userPromptTemplate: [
-                '{{baziSummary}}',
+                '만세력 JSON입니다. pillars=[천간,지지], daewoon=[천간,지지,시작연도,종료연도,시작나이,종료나이], sewoon=[연도,천간,지지]입니다. JSON 값을 우선 근거로 삼고, 없는 정보는 추측하지 마세요.',
+                '{{baziJson}}',
                 '',
                 '위 명식의 적성, 일 처리 방식, 직업적 강점과 보완점을 분석해 주세요.',
                 '특정 직업을 단정하기보다 어떤 환경, 역할, 일의 방식에서 강점이 드러나기 쉬운지 설명합니다.',
@@ -165,7 +169,8 @@ export const defaultBaziPromptPipelineConfig: BaziPromptPipelineConfig = {
             enabled: true,
             systemPrompt: '당신은 사주 원국과 현재 대운, 세운의 관계를 조심스럽고 현실적인 언어로 해석하는 한국어 상담사입니다.',
             userPromptTemplate: [
-                '{{baziSummary}}',
+                '만세력 JSON입니다. pillars=[천간,지지], daewoon=[천간,지지,시작연도,종료연도,시작나이,종료나이], sewoon=[연도,천간,지지]입니다. JSON 값을 우선 근거로 삼고, 없는 정보는 추측하지 마세요.',
+                '{{baziJson}}',
                 '',
                 '현재 운 흐름을 원국과 연결해 분석해 주세요.',
                 '현재 대운: {{currentDaewoon}}',
@@ -180,7 +185,8 @@ export const defaultBaziPromptPipelineConfig: BaziPromptPipelineConfig = {
     finalize: {
         systemPrompt: '당신은 여러 사주 분석 초안을 하나의 자연스럽고 깊이 있는 최종 상담문으로 편집하는 전문 한국어 편집자입니다.',
         userPromptTemplate: [
-            '{{baziSummary}}',
+            '만세력 JSON입니다. pillars=[천간,지지], daewoon=[천간,지지,시작연도,종료연도,시작나이,종료나이], sewoon=[연도,천간,지지]입니다. JSON 값을 우선 근거로 삼고, 없는 정보는 추측하지 마세요.',
+            '{{baziJson}}',
             '',
             '[분석 초안]',
             '{{stepResults}}',
@@ -362,7 +368,7 @@ export function normalizeBaziPromptPipelineConfig(value: unknown): BaziPromptPip
             systemPrompt: getString(finalizeSource.systemPrompt, fallback.finalize.systemPrompt),
             userPromptTemplate: getString(finalizeSource.userPromptTemplate, fallback.finalize.userPromptTemplate),
             temperature: getNumber(finalizeSource.temperature, fallback.finalize.temperature, 0, 2),
-            maxTokens: getInteger(finalizeSource.maxTokens, fallback.finalize.maxTokens, 256, 8000),
+            maxTokens: getInteger(finalizeSource.maxTokens, fallback.finalize.maxTokens, 256, BAZI_PROMPT_MAX_TOKENS_LIMIT),
         },
     };
 }
@@ -409,7 +415,7 @@ function normalizeStepConfig(value: unknown, fallback: BaziPromptStepConfig | un
         systemPrompt: getString(source.systemPrompt, base.systemPrompt),
         userPromptTemplate: getString(source.userPromptTemplate, base.userPromptTemplate),
         temperature: getNumber(source.temperature, base.temperature, 0, 2),
-        maxTokens: getInteger(source.maxTokens, base.maxTokens, 256, 8000),
+        maxTokens: getInteger(source.maxTokens, base.maxTokens, 256, BAZI_PROMPT_MAX_TOKENS_LIMIT),
     };
 }
 
@@ -424,14 +430,30 @@ function buildBaziPromptContext(result: BaziResult): Record<string, string> {
     const daewoonList = result.daewoon?.list || [];
     const currentDaewoon = result.daewoon?.current || findCurrentDaewoon(daewoonList, currentYear);
     const adjacentDaewoon = findAdjacentDaewoon(daewoonList, currentDaewoon);
-    const currentSewoon = currentDaewoon ? getYearGanji(currentYear) : null;
+    const currentSewoon = getYearGanji(currentYear);
     const previousDaewoonText = adjacentDaewoon.previous ? formatDaewoon(adjacentDaewoon.previous) : '-';
     const currentDaewoonText = currentDaewoon ? formatDaewoon(currentDaewoon) : '-';
     const nextDaewoonText = adjacentDaewoon.next ? formatDaewoon(adjacentDaewoon.next) : '-';
     const previousDaewoonYearRange = adjacentDaewoon.previous ? formatDaewoonYearRange(adjacentDaewoon.previous) : '-';
     const currentDaewoonYearRange = currentDaewoon ? formatDaewoonYearRange(currentDaewoon) : '-';
     const nextDaewoonYearRange = adjacentDaewoon.next ? formatDaewoonYearRange(adjacentDaewoon.next) : '-';
-    const currentSewoonText = currentSewoon ? `${currentSewoon.gan}${currentSewoon.ji}` : '-';
+    const currentSewoonText = `${currentSewoon.gan}${currentSewoon.ji}`;
+    const baziJson = JSON.stringify({
+        gender,
+        pillars: {
+            year: formatPillarTuple(pillars.year),
+            month: formatPillarTuple(pillars.month),
+            day: formatPillarTuple(pillars.day),
+            time: formatPillarTuple(pillars.time),
+        },
+        dayMaster: formatStemOrBranchValue(pillars.day?.gan),
+        daewoon: {
+            previous: formatDaewoonTuple(adjacentDaewoon.previous),
+            current: formatDaewoonTuple(currentDaewoon),
+            next: formatDaewoonTuple(adjacentDaewoon.next),
+        },
+        sewoon: [currentYear, currentSewoon.gan, currentSewoon.ji],
+    });
     const baziSummary = [
         `[성별: ${gender}]인 분이 [년주: ${yearPillar} / 월주: ${monthPillar} / 일주: ${dayPillar} / 시주: ${timePillar}] 명식으로 태어났습니다.`,
         currentDaewoon ? `[현재 운 흐름: 이전 대운 ${previousDaewoonText} / 현재 대운 ${currentDaewoonText} / 이후 대운 ${nextDaewoonText} / 현재 세운 ${currentYear}년 ${currentSewoonText}]입니다.` : '',
@@ -452,6 +474,7 @@ function buildBaziPromptContext(result: BaziResult): Record<string, string> {
         nextDaewoon: nextDaewoonText,
         nextDaewoonYearRange,
         currentSewoon: currentSewoonText,
+        baziJson,
         baziSummary,
     };
 }
@@ -511,6 +534,19 @@ function formatDaewoonYearRange(daewoon?: NonNullable<BaziResult['daewoon']>['cu
     return `${daewoon.start_year}~${daewoon.end_year}년`;
 }
 
+function formatDaewoonTuple(daewoon?: NonNullable<BaziResult['daewoon']>['current'] | null) {
+    if (!daewoon) return null;
+
+    return [
+        daewoon.gan || null,
+        daewoon.ji || null,
+        daewoon.start_year ?? null,
+        daewoon.end_year ?? null,
+        daewoon.start_age ?? null,
+        daewoon.end_age ?? null,
+    ];
+}
+
 function getYearGanji(year: number) {
     const heavenlyStems = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'] as const;
     const earthlyBranches = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'] as const;
@@ -528,12 +564,23 @@ function formatPillar(pillar?: NonNullable<BaziResult['four_pillars']>[keyof Non
     return `${formatStemOrBranch(pillar?.gan)}${formatStemOrBranch(pillar?.ji)}`;
 }
 
+function formatPillarTuple(pillar?: NonNullable<BaziResult['four_pillars']>[keyof NonNullable<BaziResult['four_pillars']>]) {
+    return [
+        formatStemOrBranchValue(pillar?.gan),
+        formatStemOrBranchValue(pillar?.ji),
+    ];
+}
+
 function formatStemOrBranch(value?: { kr?: string; ch?: string }) {
     if (!value?.kr && !value?.ch) return '-';
     if (!value.kr) return value.ch || '-';
     if (!value.ch) return value.kr;
 
     return `${value.kr}(${value.ch})`;
+}
+
+function formatStemOrBranchValue(value?: { kr?: string; ch?: string }) {
+    return value?.ch || value?.kr || null;
 }
 
 function getKstYear() {

@@ -99,6 +99,8 @@ export async function POST(request: NextRequest) {
         enabled,
         sort_order: sortOrder,
         updated_at: new Date().toISOString(),
+      }, {
+        onConflict: 'key',
       });
 
     if (consultationTypeError) throw consultationTypeError;
@@ -223,6 +225,8 @@ export async function PATCH(request: NextRequest) {
           enabled,
           sort_order: sortOrder,
           updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'key',
         });
 
       if (consultationTypeError) throw consultationTypeError;
@@ -291,6 +295,8 @@ export async function PATCH(request: NextRequest) {
         enabled,
         sort_order: sortOrder,
         updated_at: new Date().toISOString(),
+      }, {
+        onConflict: 'key',
       });
 
     if (consultationTypeError) throw consultationTypeError;
