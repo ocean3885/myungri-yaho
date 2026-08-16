@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Archive, ChevronRight, FileText, LogIn } from 'lucide-react';
 
 import { auth } from '@/auth';
+import { DeleteConsultationButton } from '@/app/archive/DeleteConsultationButton';
 import {
     formatKstDate,
     getConsultationTitle,
@@ -80,37 +81,45 @@ export default async function ArchivePage() {
 
             {consultations.length > 0 ? (
                 <div className="space-y-3">
-                    {consultations.map((item) => (
-                        <Link
-                            key={item.id}
-                            href={`/archive/${item.id}`}
-                            className="block rounded-[12px] border border-[#ead8c6] bg-white px-4 py-4 shadow-[0_10px_28px_rgba(92,61,25,0.055)] transition hover:border-[#dfc5aa] hover:bg-[#fffaf4]"
-                        >
-                            <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                    <p className="truncate text-[17px] font-semibold text-[#171553]">
-                                        {item.subject_name || '이름 없는 상담'} · {getConsultationTitle(item.prompt_version, item.consultation_type_key)}
-                                    </p>
-                                    <p className="mt-1 text-[12px] text-[#8a7a68]">
-                                        {formatKstDate(item.request_date_kst)}
-                                    </p>
+                    {consultations.map((item) => {
+                        const subjectName = item.subject_name || '이름 없는 상담';
+
+                        return (
+                            <article
+                                key={item.id}
+                                className="rounded-[12px] border border-[#ead8c6] bg-white px-4 py-4 shadow-[0_10px_28px_rgba(92,61,25,0.055)] transition hover:border-[#dfc5aa] hover:bg-[#fffaf4]"
+                            >
+                                <div className="flex items-start justify-between gap-3">
+                                    <Link href={`/archive/${item.id}`} className="min-w-0 flex-1">
+                                        <p className="truncate text-[17px] font-semibold text-[#171553]">
+                                            {subjectName} · {getConsultationTitle(item.prompt_version, item.consultation_type_key)}
+                                        </p>
+                                        <p className="mt-1 text-[12px] text-[#8a7a68]">
+                                            {formatKstDate(item.request_date_kst)}
+                                        </p>
+                                    </Link>
+                                    <div className="flex shrink-0 items-center gap-2">
+                                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getStatusClassName(item.status)}`}>
+                                            {getStatusLabel(item.status)}
+                                        </span>
+                                        <DeleteConsultationButton consultationId={item.id} subjectName={subjectName} />
+                                    </div>
                                 </div>
-                                <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getStatusClassName(item.status)}`}>
-                                    {getStatusLabel(item.status)}
-                                </span>
-                            </div>
-                            <p className="mt-3 line-clamp-2 break-keep text-[13px] leading-[1.6] text-[#555555]">
-                                {item.status === 'failed' ? '상담 생성에 실패했습니다. 상세에서 상태를 확인해주세요.' : getResultPreview(item.result_text)}
-                            </p>
-                            <div className="mt-3 flex items-center justify-between border-t border-[#f0e4d8] pt-3 text-[#171553]">
-                                <span className="flex items-center gap-1.5 text-[12px] font-semibold">
-                                    <FileText className="h-4 w-4" strokeWidth={2} />
-                                    상세 보기
-                                </span>
-                                <ChevronRight className="h-5 w-5" strokeWidth={2.2} />
-                            </div>
-                        </Link>
-                    ))}
+                                <Link href={`/archive/${item.id}`} className="block">
+                                    <p className="mt-3 line-clamp-2 break-keep text-[13px] leading-[1.6] text-[#555555]">
+                                        {item.status === 'failed' ? '상담 생성에 실패했습니다. 상세에서 상태를 확인해주세요.' : getResultPreview(item.result_text)}
+                                    </p>
+                                    <div className="mt-3 flex items-center justify-between border-t border-[#f0e4d8] pt-3 text-[#171553]">
+                                        <span className="flex items-center gap-1.5 text-[12px] font-semibold">
+                                            <FileText className="h-4 w-4" strokeWidth={2} />
+                                            상세 보기
+                                        </span>
+                                        <ChevronRight className="h-5 w-5" strokeWidth={2.2} />
+                                    </div>
+                                </Link>
+                            </article>
+                        );
+                    })}
                 </div>
             ) : (
                 <div className="rounded-[12px] border border-dashed border-[#e5d2bd] bg-white px-5 py-10 text-center">
