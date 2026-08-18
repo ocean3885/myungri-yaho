@@ -4,6 +4,7 @@ import { createAdminClient } from '@/utils/supabase/server';
 import bcrypt from 'bcryptjs';
 
 export const { auth, signIn, signOut, handlers } = NextAuth({
+    trustHost: true,
     providers: [
         CredentialsProvider({
             name: 'Credentials',
