@@ -34,7 +34,7 @@ export default function HomeHeader() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-40 flex h-20 shrink-0 items-center justify-center bg-[#FEFAF5]/95 px-6 pt-4 backdrop-blur">
+    <header className="sticky top-0 z-40 flex h-20 shrink-0 items-center justify-center bg-[#FEFAF5]/95 px-6 pt-4 backdrop-blur max-[480px]:h-16 max-[480px]:px-4 max-[480px]:pt-2">
       <Link href="/" className="absolute left-1/2 -translate-x-1/2" aria-label="홈으로 이동">
         <Image
           src="/images/my-logo.png"
@@ -42,13 +42,13 @@ export default function HomeHeader() {
           width={180}
           height={48}
           priority
-          className="object-contain"
+          className="object-contain max-[480px]:w-[150px]"
         />
       </Link>
       {isAuthenticated === false && (
         <Link
           href="/auth/signin"
-          className="absolute right-6 flex h-9 w-9 items-center justify-center rounded-full border border-[#ead8c6] bg-white text-[#171553] transition hover:bg-[#fff8f0]"
+          className="absolute right-6 flex h-9 w-9 items-center justify-center rounded-full border border-[#ead8c6] bg-white text-[#171553] transition hover:bg-[#fff8f0] max-[480px]:right-4"
           aria-label="로그인"
           title="로그인"
         >
