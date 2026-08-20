@@ -2,16 +2,17 @@
 
 import Link from 'next/link';
 import { signOut } from 'next-auth/react';
-import { LogIn, LogOut, Settings, UserRound } from 'lucide-react';
+import { Coins, LogIn, LogOut, Settings, UserRound } from 'lucide-react';
 
 type Props = {
   isAuthenticated: boolean;
   isAdmin: boolean;
   userName: string | null;
   userEmail: string | null;
+  coinBalance: number;
 };
 
-export default function MyClient({ isAuthenticated, isAdmin, userName, userEmail }: Props) {
+export default function MyClient({ isAuthenticated, isAdmin, userName, userEmail, coinBalance }: Props) {
   const handleSignOut = () => {
     signOut({ callbackUrl: '/' });
   };
@@ -58,6 +59,11 @@ export default function MyClient({ isAuthenticated, isAdmin, userName, userEmail
             {userEmail && <p className="mt-1 truncate text-[13px] text-[#66594d]">{userEmail}</p>}
           </div>
         </div>
+
+        <Link href="/coins" className="mt-6 flex items-center justify-between rounded-[8px] border border-[#ead8c6] bg-white px-4 py-3 text-[#171553]">
+          <span className="flex items-center gap-2 text-[14px] font-medium"><Coins className="h-4 w-4 text-[#b06b16]" />보유 코인</span>
+          <span className="font-semibold">{coinBalance} 코인</span>
+        </Link>
 
         {isAdmin && (
           <Link

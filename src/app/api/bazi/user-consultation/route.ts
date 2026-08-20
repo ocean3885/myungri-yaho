@@ -65,6 +65,23 @@ export async function POST(request: NextRequest) {
 
         const subjectName = normalizeSubjectName(body.subjectName);
         const prompt = await buildBaziPrompt(adminSupabase, body.result, consultationType);
+        const coinPrice = consultationType.coinPrice ?? 1;
+        let coinTransactionId: string | null = null;
+        if (coinPrice > 0) {
+            const { data, error } = await adminSupabase.rpc('consume_coins', {
+                p_user_id: user.id,
+                p_amount: coinPrice,
+                p_description: `${consultationType.name} 상담`,
+            });
+            if (error) {
+                const insufficient = error.message?.includes('INSUFFICIENT_COINS');
+                return NextResponse.json(
+                    { message: insufficient ? '코인이 부족합니다. 충전 후 다시 신청해주세요.' : '코인 차감에 실패했습니다.', code: insufficient ? 'INSUFFICIENT_COINS' : 'COIN_ERROR' },
+                    { status: insufficient ? 402 : 500 },
+                );
+            }
+            coinTransactionId = data;
+        }
         const { data: consultation, error: insertError } = await adminSupabase
             .from('user_consultations')
             .insert({
@@ -80,11 +97,15 @@ export async function POST(request: NextRequest) {
                 prompt,
                 result_text: null,
                 status: 'pending',
+                coin_transaction_id: coinTransactionId,
             })
             .select('id')
             .single();
 
-        if (insertError) throw insertError;
+        if (insertError) {
+            if (coinTransactionId) await adminSupabase.rpc('refund_coin_transaction', { p_transaction_id: coinTransactionId, p_description: '상담 생성 실패' });
+            throw insertError;
+        }
 
         after(async () => {
             await generateAndStoreBaziInterpretation({

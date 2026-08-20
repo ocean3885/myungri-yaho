@@ -50,6 +50,11 @@ export async function generateAndStoreBaziInterpretation({
     } catch (error) {
         console.error(`Background user consultation interpretation failed:`, error);
         const message = error instanceof Error ? error.message : '사주 해설 생성에 실패했습니다.';
+        const { data: consultation } = await adminSupabase
+            .from('user_consultations')
+            .select('coin_transaction_id')
+            .eq('id', consultationId)
+            .maybeSingle();
         await adminSupabase
             .from('user_consultations')
             .update({
@@ -57,6 +62,12 @@ export async function generateAndStoreBaziInterpretation({
                 error_message: message,
             })
             .eq('id', consultationId);
+        if (consultation?.coin_transaction_id) {
+            await adminSupabase.rpc('refund_coin_transaction', {
+                p_transaction_id: consultation.coin_transaction_id,
+                p_description: '상담 생성 실패',
+            });
+        }
     } finally {
         revalidatePaths.forEach((path) => revalidatePath(path));
     }
