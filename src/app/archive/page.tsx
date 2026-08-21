@@ -1,8 +1,9 @@
 import Link from 'next/link';
-import { Archive, ChevronRight, FileText, LogIn } from 'lucide-react';
+import { Archive, ChevronRight, FileText, LoaderCircle, LogIn } from 'lucide-react';
 
 import { auth } from '@/auth';
 import { DeleteConsultationButton } from '@/app/archive/DeleteConsultationButton';
+import ArchiveAutoRefresh from '@/app/archive/ArchiveAutoRefresh';
 import {
     formatKstDate,
     getConsultationTitle,
@@ -68,6 +69,7 @@ export default async function ArchivePage() {
 
     return (
         <section className="pt-2">
+            {consultations.some((item) => item.status === 'pending') && <ArchiveAutoRefresh />}
             <div className="mb-5">
                 <p className="flex items-center gap-1.5 text-[13px] font-semibold text-[#b06b16]">
                     <Archive className="h-4 w-4" strokeWidth={2} />
@@ -83,6 +85,7 @@ export default async function ArchivePage() {
                 <div className="space-y-3">
                     {consultations.map((item) => {
                         const subjectName = item.subject_name || '이름 없는 상담';
+                        const isPending = item.status === 'pending';
 
                         return (
                             <article
@@ -99,16 +102,32 @@ export default async function ArchivePage() {
                                         </p>
                                     </Link>
                                     <div className="flex shrink-0 items-center gap-2">
-                                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getStatusClassName(item.status)}`}>
-                                            {getStatusLabel(item.status)}
-                                        </span>
-                                        <DeleteConsultationButton consultationId={item.id} subjectName={subjectName} />
+                                        {isPending ? (
+                                            <span className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getStatusClassName(item.status)}`}>
+                                                <LoaderCircle className="h-3.5 w-3.5 animate-spin" strokeWidth={2.2} aria-hidden="true" />
+                                                분석 중
+                                            </span>
+                                        ) : (
+                                            <>
+                                                <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getStatusClassName(item.status)}`}>
+                                                    {getStatusLabel(item.status)}
+                                                </span>
+                                                <DeleteConsultationButton consultationId={item.id} subjectName={subjectName} />
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                                 <Link href={`/archive/${item.id}`} className="block">
-                                    <p className="mt-3 line-clamp-2 break-keep text-[13px] leading-[1.6] text-[#555555]">
-                                        {item.status === 'failed' ? '상담 생성에 실패했습니다. 상세에서 상태를 확인해주세요.' : getResultPreview(item.result_text)}
-                                    </p>
+                                    {isPending ? (
+                                        <div className="mt-3 flex items-center gap-2 rounded-[8px] bg-[#fff8ec] px-3 py-2.5 text-[13px] text-[#9a6616]" role="status">
+                                            <LoaderCircle className="h-4 w-4 shrink-0 animate-spin" strokeWidth={2} aria-hidden="true" />
+                                            상담을 분석하고 있어요
+                                        </div>
+                                    ) : (
+                                        <p className="mt-3 line-clamp-2 break-keep text-[13px] leading-[1.6] text-[#555555]">
+                                            {item.status === 'failed' ? '상담 생성에 실패했습니다. 상세에서 상태를 확인해주세요.' : getResultPreview(item.result_text)}
+                                        </p>
+                                    )}
                                     <div className="mt-3 flex items-center justify-between border-t border-[#f0e4d8] pt-3 text-[#171553]">
                                         <span className="flex items-center gap-1.5 text-[12px] font-semibold">
                                             <FileText className="h-4 w-4" strokeWidth={2} />

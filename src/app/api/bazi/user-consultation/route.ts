@@ -54,7 +54,10 @@ export async function POST(request: NextRequest) {
     try {
         const requestDateKst = getKstDateString();
         const adminSupabase = await createAdminClient();
-        const consultationType = await getConsultationTypeByKey(adminSupabase, body.consultationType);
+        const [consultationType, userResult] = await Promise.all([
+            getConsultationTypeByKey(adminSupabase, body.consultationType),
+            adminSupabase.from('users').select('role').eq('id', user.id).maybeSingle(),
+        ]);
 
         if (!consultationType.enabled) {
             return NextResponse.json(
@@ -66,8 +69,9 @@ export async function POST(request: NextRequest) {
         const subjectName = normalizeSubjectName(body.subjectName);
         const prompt = await buildBaziPrompt(adminSupabase, body.result, consultationType);
         const coinPrice = consultationType.coinPrice ?? 1;
+        const isAdmin = userResult.data?.role === 'admin';
         let coinTransactionId: string | null = null;
-        if (coinPrice > 0) {
+        if (!isAdmin && coinPrice > 0) {
             const { data, error } = await adminSupabase.rpc('consume_coins', {
                 p_user_id: user.id,
                 p_amount: coinPrice,
@@ -119,6 +123,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
             message: '상담 신청이 접수되었습니다. 해설은 분석이 완료되는 대로 보관함에 표시됩니다.',
             id: consultation.id,
+            chargedCoins: isAdmin ? 0 : coinPrice,
         });
     } catch (error) {
         console.error('Free bazi consultation failed:', error);

@@ -49,6 +49,7 @@ export default async function PeoplePage() {
         key: type.key,
         name: type.name,
         description: type.description,
+        coinPrice: type.coinPrice,
       }))}
     />
   );

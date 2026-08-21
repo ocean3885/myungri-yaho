@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { CalendarDays, Check, ChevronLeft, Compass, LockKeyhole, Sparkles, Trash2, UserRound, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Check, ChevronLeft, Compass, LockKeyhole, Sparkles, Trash2, UserRound, X } from 'lucide-react';
 
 import type { BaziResult, PillarKey } from '@/components/bazi/types';
+import BaziPillarsTable from '@/components/bazi/BaziPillarsTable';
 
 const birthHourOptions = Array.from({ length: 12 }, (_, index) => index);
 const birthMinuteOptions = Array.from({ length: 12 }, (_, index) => index * 5);
@@ -14,13 +16,6 @@ const pillarOrder: Array<{ key: PillarKey; label: string }> = [
   { key: 'month', label: '월주' },
   { key: 'year', label: '년주' },
 ];
-
-const pillarMeta: Record<PillarKey, { ganTenGodKey?: string; jiTenGodKey: string }> = {
-  time: { ganTenGodKey: 'time_gan', jiTenGodKey: 'time_ji' },
-  day: { jiTenGodKey: 'day_ji' },
-  month: { ganTenGodKey: 'month_gan', jiTenGodKey: 'month_ji' },
-  year: { ganTenGodKey: 'year_gan', jiTenGodKey: 'year_ji' },
-};
 
 const detailKeyByPillar: Record<PillarKey, 'hour' | 'day' | 'month' | 'year'> = {
   time: 'hour',
@@ -96,6 +91,7 @@ export type ConsultationTypeOption = {
   key: string;
   name: string;
   description: string | null;
+  coinPrice: number;
 };
 
 export type SavedPerson = {
@@ -203,15 +199,6 @@ function getBaziParams(form: FormState) {
   };
 }
 
-function getPillarText(result: BaziResult, key: PillarKey) {
-  const pillar = result.four_pillars?.[key];
-
-  return {
-    stem: pillar?.gan?.ch || pillar?.gan?.kr || '-',
-    branch: pillar?.ji?.ch || pillar?.ji?.kr || '-',
-  };
-}
-
 function formatCalendarDate(date?: { year?: number; month?: string | number; day?: string | number }) {
   if (!date?.year || !date.month || !date.day) return '-';
   return `${date.year}.${String(date.month).padStart(2, '0')}.${String(date.day).padStart(2, '0')}`;
@@ -219,16 +206,6 @@ function formatCalendarDate(date?: { year?: number; month?: string | number; day
 
 function getPillarDetail(result: BaziResult, key: PillarKey) {
   return result.analysis?.details?.[detailKeyByPillar[key]];
-}
-
-function getTenGod(result: BaziResult, key?: string) {
-  if (!key) return '';
-  return result.ten_gods?.[key] || '';
-}
-
-function getStemTenGodLabel(result: BaziResult, key: PillarKey) {
-  if (key === 'day') return '일간(나)';
-  return getTenGod(result, pillarMeta[key].ganTenGodKey) || '-';
 }
 
 function extractHiddenStems(jijanggan?: string[]) {
@@ -291,24 +268,6 @@ function buildConicGradient(elements: ReturnType<typeof getElementBalance>) {
   return `conic-gradient(${segments.join(',')})`;
 }
 
-function getCurrentDaewoon(result: BaziResult) {
-  const currentYear = new Date().getFullYear();
-  const list = result.daewoon?.list || [];
-
-  return result.daewoon?.current || list.find((item) => {
-    if (item.start_year === undefined || item.end_year === undefined) return false;
-    return item.start_year <= currentYear && currentYear <= item.end_year;
-  });
-}
-
-function formatDaewoonRange(item?: NonNullable<BaziResult['daewoon']>['current']) {
-  if (!item) return '대운 정보 없음';
-  const age = item.start_age !== undefined && item.end_age !== undefined ? `${item.start_age}~${item.end_age}세` : '나이 정보 없음';
-  const year = item.start_year !== undefined && item.end_year !== undefined ? `${item.start_year}~${item.end_year}년` : '연도 정보 없음';
-
-  return `${age} · ${year}`;
-}
-
 function isSavedPerson(value: unknown): value is SavedPerson {
   if (!value || typeof value !== 'object') return false;
   const person = value as Partial<SavedPerson>;
@@ -355,9 +314,11 @@ function formatSavedPersonMeta(person: SavedPerson) {
 }
 
 export default function PeopleClient({ isAuthenticated, initialPeople, consultationTypes }: Props) {
+  const router = useRouter();
+  const previewSectionRef = useRef<HTMLElement>(null);
+  const shouldScrollToPreviewRef = useRef(false);
   const [people, setPeople] = useState(initialPeople);
   const [isPeopleModalOpen, setIsPeopleModalOpen] = useState(false);
-  const [isConsultationModalOpen, setIsConsultationModalOpen] = useState(false);
   const [deletingPersonId, setDeletingPersonId] = useState('');
   const [peopleMessageType, setPeopleMessageType] = useState<'success' | 'error'>('success');
   const [peopleMessage, setPeopleMessage] = useState('');
@@ -368,15 +329,44 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
   const [errorMessage, setErrorMessage] = useState('');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveMessage, setSaveMessage] = useState('');
-  const [consultationStatus, setConsultationStatus] = useState<'idle' | 'requesting' | 'requested' | 'error'>('idle');
-  const [consultationMessage, setConsultationMessage] = useState('');
-  const [requestingConsultationType, setRequestingConsultationType] = useState('');
 
   const isValidBirthDate = useMemo(() => parseBirthDate(form.birthDate) !== null, [form.birthDate]);
   const canPreview = useMemo(() => form.name.trim().length > 0 && isValidBirthDate, [form.name, isValidBirthDate]);
   const availableConsultationTypes = consultationTypes.length > 0
     ? consultationTypes
-    : [{ key: 'free_basic', name: '기본 상담', description: '사주 원국을 바탕으로 기본 성향과 현재 운 흐름을 해석합니다.' }];
+    : [{ key: 'free_basic', name: '기본 상담', description: '사주 원국을 바탕으로 기본 성향과 현재 운 흐름을 해석합니다.', coinPrice: 1 }];
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      try {
+        const storedDraft = window.sessionStorage.getItem('bazi-consultation-draft');
+        if (!storedDraft) return;
+
+        const parsed = JSON.parse(storedDraft) as {
+          form?: FormState;
+          preview?: Preview;
+          saveStatus?: 'idle' | 'saved' | 'error';
+          saveMessage?: string;
+          scrollY?: number;
+        };
+
+        if (!parsed.form || !parsed.preview?.baziResult?.four_pillars) return;
+
+        setForm(parsed.form);
+        setPreview(parsed.preview);
+        setSaveStatus(parsed.saveStatus || 'idle');
+        setSaveMessage(parsed.saveMessage || '');
+
+        window.requestAnimationFrame(() => {
+          window.scrollTo({ top: parsed.scrollY ?? 0, behavior: 'auto' });
+        });
+      } catch {
+        window.sessionStorage.removeItem('bazi-consultation-draft');
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
     if (!loadMessage) return;
@@ -389,7 +379,7 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
   }, [loadMessage]);
 
   useEffect(() => {
-    if (!isPeopleModalOpen && !isConsultationModalOpen) return;
+    if (!isPeopleModalOpen) return;
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -397,16 +387,29 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [isPeopleModalOpen, isConsultationModalOpen]);
+  }, [isPeopleModalOpen]);
+
+  useEffect(() => {
+    if (!preview || isPeopleModalOpen || !shouldScrollToPreviewRef.current) return;
+
+    shouldScrollToPreviewRef.current = false;
+    const frame = window.requestAnimationFrame(() => {
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      previewSectionRef.current?.scrollIntoView({
+        behavior: prefersReducedMotion ? 'auto' : 'smooth',
+        block: 'start',
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [preview, isPeopleModalOpen]);
 
   const updateField = (key: keyof FormState, value: string) => {
+    window.sessionStorage.removeItem('bazi-consultation-draft');
     setForm((prev) => ({ ...prev, [key]: value }));
     setPreview(null);
     setSaveStatus('idle');
     setSaveMessage('');
-    setConsultationStatus('idle');
-    setConsultationMessage('');
-    setRequestingConsultationType('');
   };
 
   const updateBirthDate = (value: string) => {
@@ -429,14 +432,13 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
     const savedForm = getSavedPersonForm(person);
     const savedPreview = getSavedPersonPreview(person, savedForm);
 
+    window.sessionStorage.removeItem('bazi-consultation-draft');
+    shouldScrollToPreviewRef.current = Boolean(savedPreview);
     setForm(savedForm);
     setPreview(savedPreview);
     setErrorMessage('');
     setSaveStatus(savedPreview ? 'saved' : 'idle');
     setSaveMessage('');
-    setConsultationStatus('idle');
-    setConsultationMessage('');
-    setRequestingConsultationType('');
     setPeopleMessage('');
     setLoadMessage(savedPreview ? `${person.name}님의 사주 정보를 불러왔어요.` : `${person.name}님의 정보를 불러왔어요. 확인하기를 눌러 사주 정보를 볼 수 있어요.`);
     setIsPeopleModalOpen(false);
@@ -476,6 +478,8 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canPreview) return;
+
+    window.sessionStorage.removeItem('bazi-consultation-draft');
 
     const baziParams = getBaziParams(form);
     if (!baziParams) return;
@@ -542,48 +546,20 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
     }
   };
 
-  const openConsultationModal = () => {
-    if (!preview || consultationStatus === 'requesting' || consultationStatus === 'requested') return;
+  const openConsultationConfirmation = (consultationType: ConsultationTypeOption) => {
+    if (!preview || !isAuthenticated) return;
 
-    setConsultationMessage('');
-    setIsConsultationModalOpen(true);
-  };
-
-  const handleConsultationRequest = async (consultationType: ConsultationTypeOption) => {
-    if (!preview || consultationStatus === 'requesting' || consultationStatus === 'requested') return;
-
-    setConsultationStatus('requesting');
-    setRequestingConsultationType(consultationType.key);
-    setConsultationMessage('');
-
-    try {
-      const response = await fetch('/api/bazi/user-consultation', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          result: preview.baziResult,
-          birthParams: preview.birthParams,
-          subjectName: preview.name,
-          consultationType: consultationType.key,
-        }),
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || '기본 상담 신청에 실패했습니다.');
-      }
-
-      setConsultationStatus('requested');
-      setConsultationMessage(data.message || `${consultationType.name} 신청이 접수되었습니다.`);
-      setIsConsultationModalOpen(false);
-    } catch (error) {
-      setConsultationStatus('error');
-      setConsultationMessage(error instanceof Error ? error.message : `${consultationType.name} 신청에 실패했습니다.`);
-    } finally {
-      setRequestingConsultationType('');
-    }
+    window.sessionStorage.setItem('bazi-consultation-draft', JSON.stringify({
+      result: preview.baziResult,
+      birthParams: preview.birthParams,
+      subjectName: preview.name,
+      form,
+      preview,
+      saveStatus: saveStatus === 'saving' ? 'idle' : saveStatus,
+      saveMessage,
+      scrollY: window.scrollY,
+    }));
+    router.push(`/people/consultation?type=${encodeURIComponent(consultationType.key)}`);
   };
 
   return (
@@ -720,60 +696,6 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
             </p>
           )}
 
-          {isConsultationModalOpen && (
-            <div className="fixed left-1/2 top-0 z-[80] flex h-dvh w-full max-w-[480px] -translate-x-1/2 items-center justify-center bg-black/45 px-5 py-6" role="dialog" aria-modal="true" aria-labelledby="consultation-types-title">
-              <div className="flex max-h-[calc(100dvh-48px)] w-full max-w-[390px] flex-col overflow-hidden rounded-[12px] border border-[#ead8c6] bg-[#fffdf9] shadow-[0_24px_70px_rgba(24,17,11,0.28)]">
-                <div className="shrink-0 flex items-start justify-between gap-4 border-b border-[#eadfd4] px-5 py-4">
-                  <div>
-                    <h3 id="consultation-types-title" className="text-[18px] font-semibold text-[#171553]">상담 종류 선택</h3>
-                    <p className="mt-1 text-[12px] text-[#73675c]">선택한 상담종류에 연결된 프롬프트로 상담을 시작합니다.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsConsultationModalOpen(false)}
-                    disabled={consultationStatus === 'requesting'}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[#7b6a5a] transition hover:bg-[#f6eee5] disabled:cursor-wait disabled:opacity-50"
-                    aria-label="닫기"
-                  >
-                    <X className="h-5 w-5" strokeWidth={2} />
-                  </button>
-                </div>
-
-                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-                  <div className="space-y-2">
-                    {availableConsultationTypes.map((type) => {
-                      const isRequesting = consultationStatus === 'requesting' && requestingConsultationType === type.key;
-
-                      return (
-                        <button
-                          key={type.key}
-                          type="button"
-                          onClick={() => handleConsultationRequest(type)}
-                          disabled={consultationStatus === 'requesting'}
-                          className="w-full rounded-[10px] border border-[#efe2d4] bg-white px-4 py-3 text-left transition hover:border-[#dfc5aa] hover:bg-[#fff8f0] disabled:cursor-wait disabled:opacity-60"
-                        >
-                          <span className="flex items-center justify-between gap-3">
-                            <span className="min-w-0">
-                              <span className="block truncate text-[15px] font-semibold text-[#171553]">{type.name}</span>
-                              {type.description && (
-                                <span className="mt-1 block break-keep text-[12px] leading-[1.55] text-[#66594d]">
-                                  {type.description}
-                                </span>
-                              )}
-                            </span>
-                            <span className="shrink-0 rounded-full bg-[#191450] px-3 py-1 text-[11px] font-semibold text-white">
-                              {isRequesting ? '신청 중' : '선택'}
-                            </span>
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
           <form id="person-form" onSubmit={handleSubmit} className="mt-5 space-y-4 scroll-mt-6">
             <label className="block">
               <span className="mb-2 block text-[14px] font-medium text-[#222222]">이름</span>
@@ -892,7 +814,10 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
           </form>
 
           {preview && (
-            <section className="mt-6 overflow-hidden rounded-[12px] border border-[#ead8c6] bg-white shadow-[0_16px_38px_rgba(58,42,29,0.08)]">
+            <section
+              ref={previewSectionRef}
+              className="mt-6 scroll-mt-4 overflow-hidden rounded-[12px] border border-[#ead8c6] bg-white shadow-[0_16px_38px_rgba(58,42,29,0.08)]"
+            >
               <header className="border-b border-[#eadfd4] bg-[#fffaf4] px-5 py-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -921,48 +846,7 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
               </header>
 
               <div className="space-y-4 px-4 py-4">
-                <section>
-                  <div className="flex items-center gap-2">
-                    <CalendarDays className="h-4 w-4 text-[#b06b16]" strokeWidth={2} />
-                    <h3 className="text-[15px] font-semibold text-[#2a2018]">사주 정국</h3>
-                  </div>
-
-                  <div className="mt-3 overflow-hidden rounded-[8px] border border-[#eadfd4] bg-[#fffaf4]">
-                    <div className="grid grid-cols-4 border-b border-[#eadfd4] text-center">
-                      {pillarOrder.map((pillar) => (
-                        <div key={pillar.key} className="min-w-0 border-r border-[#eadfd4] px-1 py-2.5 last:border-r-0">
-                          <p className="text-[12px] font-semibold text-[#65574b]">{pillar.label}</p>
-                          <p className="mt-1 min-h-4 break-keep text-[11px] leading-4 text-[#9d7750]">
-                            {getStemTenGodLabel(preview.baziResult, pillar.key)}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="grid grid-cols-4 text-center">
-                      {pillarOrder.map((pillar) => {
-                        const pillarText = getPillarText(preview.baziResult, pillar.key);
-                        const detail = getPillarDetail(preview.baziResult, pillar.key);
-                        const hiddenStems = detail?.branch?.jijanggan?.join(', ') || '없음';
-
-                        return (
-                          <article key={pillar.key} className="min-w-0 border-r border-[#eadfd4] last:border-r-0">
-                            <div className="border-b border-[#eadfd4] py-3">
-                              <p className="text-[29px] font-semibold leading-none text-[#171553]">{pillarText.stem}</p>
-                            </div>
-                            <div className="border-b border-[#eadfd4] py-3">
-                              <p className="text-[29px] font-semibold leading-none text-[#171553]">{pillarText.branch}</p>
-                            </div>
-                            <p className="border-b border-[#eadfd4] px-1 py-2 text-[11px] leading-4 text-[#8a6245]">
-                              {getTenGod(preview.baziResult, pillarMeta[pillar.key].jiTenGodKey) || '-'}
-                            </p>
-                            <p className="min-h-12 break-keep px-1.5 py-2 text-[11px] leading-4 text-[#74675b]">{hiddenStems}</p>
-                          </article>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </section>
+                <BaziPillarsTable result={preview.baziResult} />
 
                 {(() => {
                   const elements = getElementBalance(preview.baziResult);
@@ -1000,68 +884,28 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
                   );
                 })()}
 
-                <section className="grid grid-cols-1 gap-3">
-                  {(() => {
-                    const currentDaewoon = getCurrentDaewoon(preview.baziResult);
-
-                    return (
-                      <article className="rounded-[10px] border border-[#eee2d6] bg-[#fffdf9] px-4 py-4">
-                        <p className="text-[12px] font-semibold text-[#b06b16]">현재 대운</p>
-                        <h3 className="mt-1 text-[16px] font-semibold text-[#2a2018]">
-                          {currentDaewoon ? `${currentDaewoon.gan || ''}${currentDaewoon.ji || ''} 대운` : '대운 시작 전'}
-                        </h3>
-                        <p className="mt-2 text-[13px] leading-[1.65] text-[#66594d]">
-                          {preview.baziResult.daewoon?.direction || '-'} · {formatDaewoonRange(currentDaewoon)}
-                        </p>
-                      </article>
-                    );
-                  })()}
-                </section>
-
-                <section className="rounded-[10px] bg-[#FEFAF5] px-4 py-4">
-                  <div className="flex items-start gap-2">
-                    <LockKeyhole className="mt-0.5 h-5 w-5 shrink-0 text-[#b06b16]" strokeWidth={2} />
-                    <p className="text-[13px] leading-[1.65] text-[#444444]">
-                      {isAuthenticated
-                        ? '입력한 사주 정보를 저장하거나 원하는 상담으로 이어갈 수 있어요.'
-                        : 'AI 사주 상담, 결과 저장, 인물 관리는 로그인 후 이용할 수 있어요.'}
-                    </p>
-                  </div>
-                  <div className="mt-4 grid grid-cols-2 gap-3">
+                <section className="rounded-[10px] border border-[#eadfd4] bg-[#FEFAF5] px-4 py-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex min-w-0 items-start gap-2">
+                      <LockKeyhole className="mt-0.5 h-5 w-5 shrink-0 text-[#b06b16]" strokeWidth={2} />
+                      <div>
+                        <h3 className="text-[15px] font-semibold text-[#2a2018]">입력한 사주정보를 저장하세요</h3>
+                        <p className="mt-1 break-keep text-[12px] leading-[1.55] text-[#66594d]">다음에도 인물 목록에서 바로 불러올 수 있어요.</p>
+                      </div>
+                    </div>
                     {isAuthenticated ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={handleSavePerson}
-                          disabled={saveStatus === 'saving' || saveStatus === 'saved'}
-                          className="font-display flex h-11 cursor-pointer items-center justify-center rounded-[9px] border border-[#191450] bg-white text-[14px] font-medium tracking-[0.01em] text-[#191450] transition-colors hover:bg-[#FEFAF5] disabled:cursor-not-allowed disabled:border-[#cfc8bd] disabled:bg-[#f4eee7] disabled:text-[#8b8178]"
-                        >
-                          {saveStatus === 'saving' ? '저장 중' : saveStatus === 'saved' ? '저장 완료' : '저장하기'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={openConsultationModal}
-                          disabled={consultationStatus === 'requesting' || consultationStatus === 'requested'}
-                          className="font-display flex h-11 cursor-pointer items-center justify-center rounded-[9px] bg-[#191450] text-[14px] font-medium tracking-[0.01em] text-white transition-colors hover:bg-[#24206a] disabled:cursor-not-allowed disabled:bg-[#cfc8bd]"
-                        >
-                          {consultationStatus === 'requesting' ? '신청 중' : consultationStatus === 'requested' ? '신청 완료' : '상담하기'}
-                        </button>
-                      </>
+                      <button
+                        type="button"
+                        onClick={handleSavePerson}
+                        disabled={saveStatus === 'saving' || saveStatus === 'saved'}
+                        className="font-display flex h-10 shrink-0 cursor-pointer items-center justify-center rounded-[9px] border border-[#191450] bg-white px-4 text-[13px] font-medium text-[#191450] transition-colors hover:bg-[#fffaf4] disabled:cursor-not-allowed disabled:border-[#cfc8bd] disabled:bg-[#f4eee7] disabled:text-[#8b8178]"
+                      >
+                        {saveStatus === 'saving' ? '저장 중' : saveStatus === 'saved' ? '저장 완료' : '저장하기'}
+                      </button>
                     ) : (
-                      <>
-                        <Link
-                          href="/auth/signin"
-                          className="font-display flex h-11 cursor-pointer items-center justify-center rounded-[9px] border border-[#191450] bg-white text-[14px] font-medium tracking-[0.01em] text-[#191450] transition-colors hover:bg-[#FEFAF5]"
-                        >
-                          저장하기
-                        </Link>
-                        <Link
-                          href="/auth/signin"
-                          className="font-display flex h-11 cursor-pointer items-center justify-center rounded-[9px] bg-[#191450] text-[14px] font-medium tracking-[0.01em] text-white transition-colors hover:bg-[#24206a]"
-                        >
-                          상담하기
-                        </Link>
-                      </>
+                      <Link href="/auth/signin" className="font-display flex h-10 shrink-0 items-center rounded-[9px] border border-[#191450] bg-white px-4 text-[13px] font-medium text-[#191450]">
+                        저장하기
+                      </Link>
                     )}
                   </div>
                   {saveMessage && (
@@ -1072,14 +916,35 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
                       {saveMessage}
                     </p>
                   )}
-                  {consultationMessage && (
-                    <p className={`mt-3 rounded-[8px] px-3 py-2 text-[12px] leading-[1.55] ${consultationStatus === 'error'
-                      ? 'bg-[#fff2ec] text-[#a05738]'
-                      : 'bg-[#eef8ef] text-[#357247]'
-                      }`}>
-                      {consultationMessage}
-                    </p>
-                  )}
+                </section>
+
+                <section className="rounded-[10px] border border-[#eadfd4] bg-white px-4 py-4">
+                  <h3 className="text-[16px] font-semibold text-[#171553]">상담 종류</h3>
+                  <p className="mt-1 text-[12px] leading-[1.55] text-[#66594d]">상담 내용과 비용을 확인한 후 진행하세요.</p>
+                  <div className="mt-3 divide-y divide-[#eee2d6] border-y border-[#eee2d6]">
+                    {availableConsultationTypes.map((type) => (
+                      <article key={type.key} className="flex items-center gap-3 py-3">
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-[14px] font-semibold text-[#2a2018]">{type.name}</h4>
+                          {type.description && <p className="mt-1 break-keep text-[12px] leading-[1.5] text-[#66594d]">{type.description}</p>}
+                          <p className="mt-1 text-[12px] font-semibold text-[#b06b16]">{type.coinPrice}코인</p>
+                        </div>
+                        {isAuthenticated ? (
+                          <button
+                            type="button"
+                            onClick={() => openConsultationConfirmation(type)}
+                            className="font-display flex h-10 shrink-0 items-center rounded-[9px] bg-[#191450] px-4 text-[13px] font-medium text-white transition hover:bg-[#24206a]"
+                          >
+                            상담하기
+                          </button>
+                        ) : (
+                          <Link href="/auth/signin" className="font-display flex h-10 shrink-0 items-center rounded-[9px] bg-[#191450] px-4 text-[13px] font-medium text-white">
+                            로그인
+                          </Link>
+                        )}
+                      </article>
+                    ))}
+                  </div>
                 </section>
               </div>
             </section>

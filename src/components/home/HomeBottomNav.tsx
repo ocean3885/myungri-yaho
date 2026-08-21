@@ -7,7 +7,7 @@ import { Archive, Home as HomeIcon, User, UserRound } from 'lucide-react';
 export default function HomeBottomNav() {
   const router = useRouter();
   const pathname = usePathname();
-  const activeTab = pathname === '/people' ? 'people' : pathname.startsWith('/archive') ? 'archive' : pathname === '/my' ? 'my' : 'home';
+  const activeTab = pathname.startsWith('/people') ? 'people' : pathname.startsWith('/archive') ? 'archive' : pathname === '/my' ? 'my' : 'home';
 
   const itemClass = (tab: string) =>
     `relative flex min-h-12 cursor-pointer flex-col items-center justify-center transition ${

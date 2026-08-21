@@ -3,7 +3,8 @@ import { notFound } from 'next/navigation';
 import { Archive, CalendarDays, ChevronLeft, Clock, FileText, LogIn, TriangleAlert } from 'lucide-react';
 
 import { auth } from '@/auth';
-import type { BaziResult, PillarKey } from '@/components/bazi/types';
+import BaziPillarsTable from '@/components/bazi/BaziPillarsTable';
+import type { BaziResult } from '@/components/bazi/types';
 import {
     formatKstDate,
     formatKstDateTime,
@@ -12,6 +13,7 @@ import {
     getStatusLabel,
 } from '@/lib/archive-format';
 import { createAdminClient } from '@/utils/supabase/server';
+import ConsultationPending from './ConsultationPending';
 
 type ConsultationDetail = {
     id: string;
@@ -27,13 +29,6 @@ type ConsultationDetail = {
     prompt_setting_key: string | null;
     created_at: string;
 };
-
-const pillarOrder: Array<{ key: PillarKey; label: string }> = [
-    { key: 'time', label: '시주' },
-    { key: 'day', label: '일주' },
-    { key: 'month', label: '월주' },
-    { key: 'year', label: '년주' },
-];
 
 export default async function ArchiveDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const session = await auth();
@@ -120,28 +115,7 @@ export default async function ArchiveDetailPage({ params }: { params: Promise<{ 
                 </div>
 
                 <div className="space-y-4 px-4 py-4">
-                    <section className="rounded-[10px] border border-[#eee2d6] bg-[#fffdf9] px-4 py-4">
-                        <h3 className="text-[15px] font-semibold text-[#2a2018]">명식</h3>
-                        <div className="mt-3 grid grid-cols-4 overflow-hidden rounded-[8px] border border-[#eadfd4] bg-white text-center">
-                            {pillarOrder.map((pillar) => {
-                                const value = baziResult.four_pillars?.[pillar.key];
-
-                                return (
-                                    <div key={pillar.key} className="min-w-0 border-r border-[#eadfd4] last:border-r-0">
-                                        <p className="border-b border-[#eadfd4] bg-[#fffaf4] px-1 py-2 text-[12px] font-semibold text-[#65574b]">
-                                            {pillar.label}
-                                        </p>
-                                        <p className="border-b border-[#eadfd4] py-3 text-[25px] font-semibold leading-none text-[#171553]">
-                                            {formatStemOrBranch(value?.gan)}
-                                        </p>
-                                        <p className="py-3 text-[25px] font-semibold leading-none text-[#171553]">
-                                            {formatStemOrBranch(value?.ji)}
-                                        </p>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </section>
+                    <BaziPillarsTable result={baziResult} />
 
                     <section className="rounded-[10px] border border-[#eee2d6] bg-[#fffdf9] px-4 py-4">
                         <h3 className="text-[15px] font-semibold text-[#2a2018]">상담 결과</h3>
@@ -158,21 +132,11 @@ export default async function ArchiveDetailPage({ params }: { params: Promise<{ 
                                 <p className="mt-1">{consultation.error_message || '상담 생성 중 오류가 발생했습니다.'}</p>
                             </div>
                         ) : (
-                            <div className="mt-3 rounded-[9px] border border-[#ead8c6] bg-[#fff8ec] px-3 py-3 text-[13px] leading-[1.65] text-[#9a6616]">
-                                상담문을 생성하고 있어요. 잠시 후 다시 확인해주세요.
-                            </div>
+                            <ConsultationPending />
                         )}
                     </section>
                 </div>
             </article>
         </section>
     );
-}
-
-function formatStemOrBranch(value?: { kr?: string; ch?: string }) {
-    if (!value?.kr && !value?.ch) return '-';
-    if (!value.kr) return value.ch || '-';
-    if (!value.ch) return value.kr;
-
-    return `${value.kr}\n${value.ch}`;
 }

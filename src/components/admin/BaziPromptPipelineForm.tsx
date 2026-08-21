@@ -13,6 +13,7 @@ import {
   type BaziPromptPipelineConfig,
   type BaziPromptSetting,
 } from '@/lib/bazi-prompt-config';
+import { DEEPSEEK_MODELS } from '@/lib/deepseek';
 
 type Props = {
   settings: BaziPromptSetting[];
@@ -509,11 +510,25 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
             value={formConfig.version}
             onChange={(value) => updateConfig({ version: value })}
           />
-          <TextInput
-            label="모델"
-            value={formConfig.model}
-            onChange={(value) => updateConfig({ model: value })}
-          />
+          <label className="block">
+            <span className="mb-2 block text-[15px] font-semibold text-[#66594d]">모델</span>
+            <select
+              value={formConfig.model}
+              onChange={(event) => updateConfig({ model: event.target.value })}
+              className={inputClassName}
+            >
+              {!DEEPSEEK_MODELS.some((model) => model.id === formConfig.model) && (
+                <option value={formConfig.model}>
+                  {formConfig.model || '모델 미지정'} (현재 지원 목록에 없음)
+                </option>
+              )}
+              {DEEPSEEK_MODELS.map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.label} — {model.description}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="block">
             <span className="mb-2 block text-[15px] font-semibold text-[#66594d]">실행 방식</span>
             <select
@@ -603,6 +618,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
                 />
                 <NumberInput
                   label="Max Tokens"
+                  labelNote="최대 16,000 토큰"
                   value={step.maxTokens}
                   step="100"
                   min="256"
@@ -651,6 +667,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
             />
             <NumberInput
               label="Max Tokens"
+              labelNote="최대 16,000 토큰"
               value={formConfig.finalize.maxTokens}
               step="100"
               min="256"
@@ -700,6 +717,7 @@ function TextInput({
 
 function NumberInput({
   label,
+  labelNote,
   value,
   min,
   max,
@@ -708,6 +726,7 @@ function NumberInput({
   onChange,
 }: {
   label: string;
+  labelNote?: string;
   value: number;
   min: string;
   max: string;
@@ -717,7 +736,10 @@ function NumberInput({
 }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-[15px] font-semibold text-[#66594d]">{label}</span>
+      <span className="mb-2 flex items-baseline gap-2 text-[15px] font-semibold text-[#66594d]">
+        {label}
+        {labelNote && <span className="text-[11px] font-normal text-[#9a8c7f]">{labelNote}</span>}
+      </span>
       <input
         type="number"
         min={min}

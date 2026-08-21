@@ -31,6 +31,7 @@ export async function deleteArchivedConsultation(consultationId: string) {
             .delete()
             .eq('id', id)
             .eq('user_id', session.user.id)
+            .neq('status', 'pending')
             .select('id')
             .maybeSingle();
 

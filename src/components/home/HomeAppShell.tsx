@@ -14,7 +14,7 @@ const shellRoutes = new Set(['/', '/people', '/archive', '/my', '/coins']);
 
 export default function HomeAppShell({ children }: Props) {
   const pathname = usePathname();
-  const shouldUseShell = shellRoutes.has(pathname) || pathname.startsWith('/archive/');
+  const shouldUseShell = shellRoutes.has(pathname) || pathname.startsWith('/archive/') || pathname.startsWith('/people/');
 
   if (!shouldUseShell) {
     return children;
