@@ -29,10 +29,9 @@ export async function POST(request: NextRequest) {
     }
 
     let body: {
-        result?: BaziResult;
-        subjectName?: string;
-        birthParams?: BaziResult['birth_params'];
+        subjects?: Array<{ personId?: string; result?: BaziResult; subjectName?: string; birthParams?: BaziResult['birth_params'] }>;
         consultationType?: string;
+        paymentId?: string;
     };
 
     try {
@@ -44,7 +43,7 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    if (!body.result?.four_pillars) {
+    if (!body.subjects?.[0]?.result?.four_pillars) {
         return NextResponse.json(
             { message: '사주 원국 정보가 없습니다.' },
             { status: 400 },
@@ -66,25 +65,51 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const subjectName = normalizeSubjectName(body.subjectName);
-        const prompt = await buildBaziPrompt(adminSupabase, body.result, consultationType);
-        const coinPrice = consultationType.coinPrice ?? 1;
+        if (body.subjects.length !== consultationType.subjectCount) {
+            return NextResponse.json({ message: `이 상담은 ${consultationType.subjectCount}명의 사주 정보가 필요합니다.` }, { status: 400 });
+        }
+        const requestedPersonIds = body.subjects.map((subject) => subject.personId).filter((id): id is string => Boolean(id));
+        if (new Set(requestedPersonIds).size !== requestedPersonIds.length) {
+            return NextResponse.json({ message: '같은 인물을 중복해서 선택할 수 없습니다.' }, { status: 400 });
+        }
+        const { data: savedPeople } = requestedPersonIds.length > 0
+            ? await adminSupabase.from('people').select('id, name, birth_params, bazi_result').eq('user_id', user.id).in('id', requestedPersonIds)
+            : { data: [] };
+        const savedPeopleById = new Map((savedPeople || []).map((person) => [person.id, person]));
+        if (savedPeopleById.size !== requestedPersonIds.length) {
+            return NextResponse.json({ message: '선택한 인물 정보를 확인할 수 없습니다.' }, { status: 400 });
+        }
+        const subjects = body.subjects.map((subject) => {
+            const savedPerson = subject.personId ? savedPeopleById.get(subject.personId) : null;
+            return {
+                personId: savedPerson?.id || null,
+                subjectName: normalizeSubjectName(savedPerson?.name || subject.subjectName) || '이름 없는 인물',
+                birthParams: savedPerson?.birth_params || subject.birthParams,
+                result: (savedPerson?.bazi_result || subject.result) as BaziResult,
+            };
+        });
+        if (subjects.some((subject) => !subject.result?.four_pillars || !subject.birthParams)) {
+            return NextResponse.json({ message: '상담 대상의 사주 정보가 올바르지 않습니다.' }, { status: 400 });
+        }
+        const primarySubject = subjects[0];
+        const subjectName = subjects.map((subject) => subject.subjectName).join(' × ');
+        const promptSubjects = subjects.map((subject) => ({ subjectName: subject.subjectName, result: subject.result }));
+        const prompt = await buildBaziPrompt(adminSupabase, primarySubject.result, consultationType, promptSubjects);
+        const priceKrw = consultationType.priceKrw ?? 990;
         const isAdmin = userResult.data?.role === 'admin';
-        let coinTransactionId: string | null = null;
-        if (!isAdmin && coinPrice > 0) {
-            const { data, error } = await adminSupabase.rpc('consume_coins', {
-                p_user_id: user.id,
-                p_amount: coinPrice,
-                p_description: `${consultationType.name} 상담`,
-            });
-            if (error) {
-                const insufficient = error.message?.includes('INSUFFICIENT_COINS');
-                return NextResponse.json(
-                    { message: insufficient ? '코인이 부족합니다. 충전 후 다시 신청해주세요.' : '코인 차감에 실패했습니다.', code: insufficient ? 'INSUFFICIENT_COINS' : 'COIN_ERROR' },
-                    { status: insufficient ? 402 : 500 },
-                );
+        let paymentOrderId: string | null = null;
+        if (!isAdmin && priceKrw > 0) {
+            if (!body.paymentId) return NextResponse.json({ message: '상담 결제정보가 없습니다.' }, { status: 402 });
+            const { data: paymentOrder } = await adminSupabase
+                .from('consultation_payment_orders')
+                .select('id, status, price_krw, consultation_type_key')
+                .eq('payment_id', body.paymentId)
+                .eq('user_id', user.id)
+                .maybeSingle();
+            if (!paymentOrder || paymentOrder.status !== 'paid' || paymentOrder.price_krw !== priceKrw || paymentOrder.consultation_type_key !== consultationType.key) {
+                return NextResponse.json({ message: '유효한 상담 결제를 확인할 수 없습니다.' }, { status: 402 });
             }
-            coinTransactionId = data;
+            paymentOrderId = paymentOrder.id;
         }
         const { data: consultation, error: insertError } = await adminSupabase
             .from('user_consultations')
@@ -95,26 +120,48 @@ export async function POST(request: NextRequest) {
                 consultation_type_key: consultationType.key,
                 prompt_setting_key: consultationType.promptSettingKey,
                 bazi_result: {
-                    ...body.result,
-                    birth_params: body.birthParams,
+                    ...primarySubject.result,
+                    birth_params: primarySubject.birthParams,
                 },
                 prompt,
                 result_text: null,
                 status: 'pending',
-                coin_transaction_id: coinTransactionId,
+                payment_order_id: paymentOrderId,
             })
             .select('id')
             .single();
 
         if (insertError) {
-            if (coinTransactionId) await adminSupabase.rpc('refund_coin_transaction', { p_transaction_id: coinTransactionId, p_description: '상담 생성 실패' });
             throw insertError;
+        }
+
+        const { error: subjectsInsertError } = await adminSupabase.from('consultation_subjects').insert(subjects.map((subject, index) => ({
+            consultation_id: consultation.id,
+            person_id: subject.personId,
+            position: index + 1,
+            subject_name: subject.subjectName,
+            birth_params: subject.birthParams,
+            bazi_result: { ...subject.result, birth_params: subject.birthParams },
+        })));
+        if (subjectsInsertError) {
+            await adminSupabase.from('user_consultations').delete().eq('id', consultation.id);
+            throw subjectsInsertError;
+        }
+
+        if (paymentOrderId) {
+            const { error: orderUpdateError } = await adminSupabase
+                .from('consultation_payment_orders')
+                .update({ status: 'used', used_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+                .eq('id', paymentOrderId)
+                .eq('status', 'paid');
+            if (orderUpdateError) console.error('Consultation payment order linkage failed:', orderUpdateError);
         }
 
         after(async () => {
             await generateAndStoreBaziInterpretation({
                 consultationId: consultation.id,
-                result: body.result!,
+                result: primarySubject.result,
+                subjects: promptSubjects,
                 consultationType: consultationType.key,
                 revalidatePaths: ['/profile', '/my/bazi-consultations'],
             });
@@ -123,7 +170,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
             message: '상담 신청이 접수되었습니다. 해설은 분석이 완료되는 대로 보관함에 표시됩니다.',
             id: consultation.id,
-            chargedCoins: isAdmin ? 0 : coinPrice,
+            paidAmount: isAdmin ? 0 : priceKrw,
         });
     } catch (error) {
         console.error('Free bazi consultation failed:', error);

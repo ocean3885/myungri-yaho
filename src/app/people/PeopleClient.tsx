@@ -62,6 +62,7 @@ const hiddenStemWeightsByLength: Record<number, number[]> = {
 };
 
 type Preview = {
+  personId?: string;
   name: string;
   relation: string;
   gender: string;
@@ -85,13 +86,15 @@ type Props = {
   isAuthenticated: boolean;
   initialPeople: SavedPerson[];
   consultationTypes: ConsultationTypeOption[];
+  selectedConsultationKey: string | null;
 };
 
 export type ConsultationTypeOption = {
   key: string;
   name: string;
   description: string | null;
-  coinPrice: number;
+  priceKrw: number;
+  subjectCount: number;
 };
 
 export type SavedPerson = {
@@ -306,14 +309,14 @@ function getSavedPersonPreview(person: SavedPerson, form: FormState) {
 
   if (!person.baziResult?.four_pillars || !birthParams) return null;
 
-  return buildPreview(form, { ...person.baziResult, birth_params: birthParams }, birthParams);
+  return { ...buildPreview(form, { ...person.baziResult, birth_params: birthParams }, birthParams), personId: person.id };
 }
 
 function formatSavedPersonMeta(person: SavedPerson) {
   return `${person.calendar} ${person.birthDate} ${person.birthTime || '시간 모름'} · ${person.gender}`;
 }
 
-export default function PeopleClient({ isAuthenticated, initialPeople, consultationTypes }: Props) {
+export default function PeopleClient({ isAuthenticated, initialPeople, consultationTypes, selectedConsultationKey }: Props) {
   const router = useRouter();
   const previewSectionRef = useRef<HTMLElement>(null);
   const shouldScrollToPreviewRef = useRef(false);
@@ -334,9 +337,16 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
   const canPreview = useMemo(() => form.name.trim().length > 0 && isValidBirthDate, [form.name, isValidBirthDate]);
   const availableConsultationTypes = consultationTypes.length > 0
     ? consultationTypes
-    : [{ key: 'free_basic', name: '기본 상담', description: '사주 원국을 바탕으로 기본 성향과 현재 운 흐름을 해석합니다.', coinPrice: 1 }];
+    : [{ key: 'free_basic', name: '기본 상담', description: '사주 원국을 바탕으로 기본 성향과 현재 운 흐름을 해석합니다.', priceKrw: 990, subjectCount: 1 }];
+  const selectedConsultationType = availableConsultationTypes.find((type) => type.key === selectedConsultationKey) || null;
+  const visibleConsultationTypes = selectedConsultationType ? [selectedConsultationType] : availableConsultationTypes;
 
   useEffect(() => {
+    if (!selectedConsultationType) {
+      window.sessionStorage.removeItem('bazi-consultation-draft');
+      return;
+    }
+
     const frame = window.requestAnimationFrame(() => {
       try {
         const storedDraft = window.sessionStorage.getItem('bazi-consultation-draft');
@@ -366,7 +376,7 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, []);
+  }, [selectedConsultationType]);
 
   useEffect(() => {
     if (!loadMessage) return;
@@ -539,6 +549,7 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
       setSaveMessage(data.message || '인물 정보를 저장했습니다.');
       if (isSavedPerson(data.person)) {
         setPeople((current) => [data.person, ...current.filter((person) => person.id !== data.person.id)]);
+        setPreview((current) => current ? { ...current, personId: data.person.id } : current);
       }
     } catch (error) {
       setSaveStatus('error');
@@ -553,6 +564,7 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
       result: preview.baziResult,
       birthParams: preview.birthParams,
       subjectName: preview.name,
+      personId: preview.personId,
       form,
       preview,
       saveStatus: saveStatus === 'saving' ? 'idle' : saveStatus,
@@ -565,12 +577,20 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
   return (
     <>
           <header className="flex h-12 items-center justify-between">
-            <Link href="/" className="flex h-10 w-10 items-center justify-center rounded-full text-[#171553]">
+            <Link href={selectedConsultationType ? '/consultations' : '/'} className="flex h-10 w-10 items-center justify-center rounded-full text-[#171553]">
               <ChevronLeft className="h-7 w-7" strokeWidth={2.2} />
             </Link>
-            <h1 className="text-[18px] font-semibold text-[#111111]">인물 등록</h1>
+            <h1 className="text-[18px] font-semibold text-[#111111]">{selectedConsultationType ? '상담 대상 입력' : '인물 등록'}</h1>
             <span className="h-10 w-10" />
           </header>
+
+          {selectedConsultationType && <section className="mt-4 rounded-[12px] border border-[#ded1f4] bg-[#f8f4ff] px-4 py-4">
+            <p className="text-[11px] font-semibold text-[#8467c8]">선택한 상담</p>
+            <div className="mt-1 flex items-start justify-between gap-3">
+              <div><h2 className="text-[17px] font-semibold text-[#171553]">{selectedConsultationType.name}</h2><p className="mt-1 text-[12px] leading-5 text-[#66594d]">{selectedConsultationType.description}</p></div>
+              <span className="shrink-0 text-[14px] font-bold text-[#b06b16]">{selectedConsultationType.priceKrw === 0 ? '무료' : `${selectedConsultationType.priceKrw.toLocaleString('ko-KR')}원`}</span>
+            </div>
+          </section>}
 
           <section className="mt-5 rounded-[12px] border border-[#ead8c6] bg-white px-4 py-3 shadow-[0_8px_24px_rgba(92,61,25,0.05)]">
             <div className="flex items-center justify-between gap-3">
@@ -922,12 +942,13 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
                   <h3 className="text-[16px] font-semibold text-[#171553]">상담 종류</h3>
                   <p className="mt-1 text-[12px] leading-[1.55] text-[#66594d]">상담 내용과 비용을 확인한 후 진행하세요.</p>
                   <div className="mt-3 divide-y divide-[#eee2d6] border-y border-[#eee2d6]">
-                    {availableConsultationTypes.map((type) => (
+                    {visibleConsultationTypes.map((type) => (
                       <article key={type.key} className="flex items-center gap-3 py-3">
                         <div className="min-w-0 flex-1">
                           <h4 className="text-[14px] font-semibold text-[#2a2018]">{type.name}</h4>
                           {type.description && <p className="mt-1 break-keep text-[12px] leading-[1.5] text-[#66594d]">{type.description}</p>}
-                          <p className="mt-1 text-[12px] font-semibold text-[#b06b16]">{type.coinPrice}코인</p>
+                          <p className="mt-1 text-[12px] font-semibold text-[#b06b16]">{type.priceKrw.toLocaleString('ko-KR')}원</p>
+                          {type.subjectCount > 1 && <p className="mt-0.5 text-[11px] text-[#8467c8]">{type.subjectCount}인 상담</p>}
                         </div>
                         {isAuthenticated ? (
                           <button

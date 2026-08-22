@@ -13,7 +13,8 @@ export type ConsultationType = {
     promptSettingKey: string;
     enabled: boolean;
     sortOrder: number;
-    coinPrice: number;
+    priceKrw: number;
+    subjectCount: number;
     createdAt?: string | null;
     updatedAt?: string | null;
 };
@@ -42,7 +43,8 @@ type ConsultationTypeRow = {
     prompt_setting_key?: string | null;
     enabled?: boolean | null;
     sort_order?: number | null;
-    coin_price?: number | null;
+    price_krw?: number | null;
+    subject_count?: number | null;
     created_at?: string | null;
     updated_at?: string | null;
 };
@@ -65,7 +67,8 @@ export function getDefaultConsultationType(): ConsultationType {
         promptSettingKey: DEFAULT_BAZI_PROMPT_SETTING_KEY,
         enabled: true,
         sortOrder: 10,
-        coinPrice: 1,
+        priceKrw: 990,
+        subjectCount: 1,
     };
 }
 
@@ -74,7 +77,7 @@ export async function getConsultationTypeByKey(adminSupabase: unknown, key?: str
     const client = adminSupabase as ConsultationTypesQueryClient;
     const { data, error } = await client
         .from('consultation_types')
-        .select('id, key, name, description, prompt_setting_key, enabled, sort_order, coin_price, created_at, updated_at')
+        .select('id, key, name, description, prompt_setting_key, enabled, sort_order, price_krw, subject_count, created_at, updated_at')
         .eq('key', normalizedKey)
         .maybeSingle();
 
@@ -102,7 +105,7 @@ export async function listConsultationTypes(adminSupabase: unknown, onlyEnabled 
     const client = adminSupabase as ConsultationTypesQueryClient;
     const query = client
         .from('consultation_types')
-        .select('id, key, name, description, prompt_setting_key, enabled, sort_order, coin_price, created_at, updated_at');
+        .select('id, key, name, description, prompt_setting_key, enabled, sort_order, price_krw, subject_count, created_at, updated_at');
     const result = onlyEnabled
         ? await query.eq('enabled', true).order('sort_order', { ascending: true }).order('key', { ascending: true })
         : await query.order('sort_order', { ascending: true }).order('key', { ascending: true });
@@ -127,7 +130,8 @@ function mapConsultationTypeRow(row: ConsultationTypeRow): ConsultationType {
         promptSettingKey: row.prompt_setting_key || getBaziPromptSettingKey(key),
         enabled: row.enabled !== false,
         sortOrder: row.sort_order ?? 100,
-        coinPrice: row.coin_price ?? 1,
+        priceKrw: row.price_krw ?? 990,
+        subjectCount: Math.min(4, Math.max(1, row.subject_count ?? 1)),
         createdAt: row.created_at || null,
         updatedAt: row.updated_at || null,
     };

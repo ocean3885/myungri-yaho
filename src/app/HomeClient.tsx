@@ -24,10 +24,10 @@ type Props = {
   initialConsultations: ConsultationItem[];
 };
 
-export default function HomeClient({ user, initialConsultations }: Props) {
+export default function HomeClient({ initialConsultations }: Props) {
   return (
     <>
-      <HomeHero user={user} consultations={initialConsultations} />
+      <HomeHero />
       <HomeRecent consultations={initialConsultations} />
       <HomeQuickMenu />
     </>

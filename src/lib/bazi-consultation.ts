@@ -3,8 +3,10 @@ import type { BaziResult } from '@/components/bazi/types';
 import { createAdminClient } from '@/utils/supabase/server';
 import { getConsultationTypeByKey, type ConsultationType } from '@/lib/consultation-types';
 import { DEEPSEEK_API_URL, DEEPSEEK_MODEL } from '@/lib/deepseek';
+import { cancelPortOnePayment } from '@/lib/portone';
 import {
     buildStepResultsText,
+    buildBaziPromptContext,
     getBaziPromptPipelineConfigBySettingKey,
     getBaziPromptPipelineConfig,
     renderBaziPromptTemplate,
@@ -17,14 +19,18 @@ import {
 const FINALIZE_STEP_RESULT_CHAR_LIMIT = 4800;
 const COMPACTED_STEP_RESULT_MAX_TOKENS = 1800;
 
+export type ConsultationPromptSubject = { subjectName: string; result: BaziResult };
+
 export async function generateAndStoreBaziInterpretation({
     consultationId,
     result,
+    subjects,
     consultationType,
     revalidatePaths,
 }: {
     consultationId: string;
     result: BaziResult;
+    subjects?: ConsultationPromptSubject[];
     consultationType?: string;
     revalidatePaths: string[];
 }) {
@@ -32,7 +38,7 @@ export async function generateAndStoreBaziInterpretation({
 
     try {
         const resolvedType = await getConsultationTypeByKey(adminSupabase, consultationType);
-        const generation = await runBaziGenerationPipeline(adminSupabase, result, resolvedType);
+        const generation = await runBaziGenerationPipeline(adminSupabase, result, resolvedType, subjects);
         const { error } = await adminSupabase
             .from('user_consultations')
             .update({
@@ -52,7 +58,7 @@ export async function generateAndStoreBaziInterpretation({
         const message = error instanceof Error ? error.message : '사주 해설 생성에 실패했습니다.';
         const { data: consultation } = await adminSupabase
             .from('user_consultations')
-            .select('coin_transaction_id')
+            .select('payment_order_id')
             .eq('id', consultationId)
             .maybeSingle();
         await adminSupabase
@@ -62,11 +68,21 @@ export async function generateAndStoreBaziInterpretation({
                 error_message: message,
             })
             .eq('id', consultationId);
-        if (consultation?.coin_transaction_id) {
-            await adminSupabase.rpc('refund_coin_transaction', {
-                p_transaction_id: consultation.coin_transaction_id,
-                p_description: '상담 생성 실패',
-            });
+        if (consultation?.payment_order_id) {
+            const { data: order } = await adminSupabase
+                .from('consultation_payment_orders')
+                .select('id, payment_id')
+                .eq('id', consultation.payment_order_id)
+                .maybeSingle();
+            if (order) {
+                await adminSupabase.from('consultation_payment_orders').update({ status: 'refund_pending', updated_at: new Date().toISOString() }).eq('id', order.id);
+                try {
+                    await cancelPortOnePayment(order.payment_id, '상담 콘텐츠 생성 실패');
+                    await adminSupabase.from('consultation_payment_orders').update({ status: 'refunded', refunded_at: new Date().toISOString(), refund_error: null, updated_at: new Date().toISOString() }).eq('id', order.id);
+                } catch (refundError) {
+                    await adminSupabase.from('consultation_payment_orders').update({ status: 'refund_failed', refund_error: refundError instanceof Error ? refundError.message : '결제 취소 실패', updated_at: new Date().toISOString() }).eq('id', order.id);
+                }
+            }
         }
     } finally {
         revalidatePaths.forEach((path) => revalidatePath(path));
@@ -77,13 +93,14 @@ export async function buildBaziPrompt(
     adminSupabase: unknown,
     result: BaziResult,
     consultationType?: ConsultationType,
+    subjects?: ConsultationPromptSubject[],
 ) {
     const config = consultationType
         ? await getBaziPromptPipelineConfigBySettingKey(adminSupabase, consultationType.promptSettingKey)
         : await getBaziPromptPipelineConfig(adminSupabase);
     const step = config.steps.find((item) => item.enabled) || config.steps[0];
 
-    return renderBaziPromptTemplate(step.userPromptTemplate, result);
+    return renderBaziPromptTemplate(step.userPromptTemplate, result, buildMultiSubjectPromptContext(subjects));
 }
 
 export function getKstDateString() {
@@ -95,7 +112,7 @@ export function normalizeSubjectName(value?: string) {
     return name || null;
 }
 
-async function runBaziGenerationPipeline(adminSupabase: unknown, result: BaziResult, consultationType: ConsultationType) {
+async function runBaziGenerationPipeline(adminSupabase: unknown, result: BaziResult, consultationType: ConsultationType, subjects?: ConsultationPromptSubject[]) {
     const config = await getBaziPromptPipelineConfigBySettingKey(adminSupabase, consultationType.promptSettingKey);
 
     if (!consultationType.enabled) {
@@ -104,11 +121,12 @@ async function runBaziGenerationPipeline(adminSupabase: unknown, result: BaziRes
 
     const enabledSteps = config.steps.filter((step) => step.enabled);
     const steps = enabledSteps.length > 0 ? enabledSteps : config.steps.slice(0, 1);
+    const subjectContext = buildMultiSubjectPromptContext(subjects);
 
     if (!config.enabled) {
         const singleStep = steps[0];
-        const userPrompt = renderBaziPromptTemplate(singleStep.userPromptTemplate, result);
-        const stepResult = await runBaziAnalysisStep(singleStep, config, result);
+        const userPrompt = renderBaziPromptTemplate(singleStep.userPromptTemplate, result, subjectContext);
+        const stepResult = await runBaziAnalysisStep(singleStep, config, result, '', subjectContext);
 
         if (!stepResult.ok || !stepResult.content.trim()) {
             throw new Error(stepResult.error || '사주 해설 분석 단계가 실패했습니다.');
@@ -130,8 +148,8 @@ async function runBaziGenerationPipeline(adminSupabase: unknown, result: BaziRes
     }
 
     const stepResults = config.executionMode === 'sequential'
-        ? await runSequentialBaziAnalysisSteps(steps, config, result)
-        : await Promise.all(steps.map((step) => runBaziAnalysisStep(step, config, result)));
+        ? await runSequentialBaziAnalysisSteps(steps, config, result, subjectContext)
+        : await Promise.all(steps.map((step) => runBaziAnalysisStep(step, config, result, '', subjectContext)));
     const successfulStepResults = stepResults.filter((step) => step.ok && step.content.trim());
 
     if (successfulStepResults.length === 0) {
@@ -140,6 +158,7 @@ async function runBaziGenerationPipeline(adminSupabase: unknown, result: BaziRes
 
     const stepResultsText = await buildFinalStepResultsText(successfulStepResults, config);
     const finalPrompt = renderBaziPromptTemplate(config.finalize.userPromptTemplate, result, {
+        ...subjectContext,
         stepResults: stepResultsText,
     });
     const interpretation = await requestDeepSeekCompletion({
@@ -215,9 +234,11 @@ async function runBaziAnalysisStep(
     step: BaziPromptStepConfig,
     config: BaziPromptPipelineConfig,
     result: BaziResult,
-    previousStepResults = ''
+    previousStepResults = '',
+    subjectContext: Record<string, string> = {},
 ): Promise<BaziPromptStepResult> {
     const userPrompt = renderBaziPromptTemplate(step.userPromptTemplate, result, {
+        ...subjectContext,
         previousStepResults,
     });
 
@@ -251,17 +272,38 @@ async function runBaziAnalysisStep(
 async function runSequentialBaziAnalysisSteps(
     steps: BaziPromptStepConfig[],
     config: BaziPromptPipelineConfig,
-    result: BaziResult
+    result: BaziResult,
+    subjectContext: Record<string, string>,
 ) {
     const results: BaziPromptStepResult[] = [];
 
     for (const step of steps) {
         const previousStepResults = buildStepResultsText(results.filter((item) => item.ok && item.content.trim()));
-        const stepResult = await runBaziAnalysisStep(step, config, result, previousStepResults);
+        const stepResult = await runBaziAnalysisStep(step, config, result, previousStepResults, subjectContext);
         results.push(stepResult);
     }
 
     return results;
+}
+
+function buildMultiSubjectPromptContext(subjects?: ConsultationPromptSubject[]) {
+    if (!subjects || subjects.length === 0) return {};
+    const contexts = subjects.map((subject) => {
+        const context = buildBaziPromptContext(subject.result);
+        return { context, name: subject.subjectName, baziJson: context.baziJson, baziSummary: context.baziSummary };
+    });
+    const extra: Record<string, string> = {
+        subjectCount: String(contexts.length),
+        subjectsJson: JSON.stringify(contexts.map((context) => ({ name: context.name, bazi: JSON.parse(context.baziJson) }))),
+        subjectsSummary: contexts.map((context, index) => `[인물 ${index + 1}: ${context.name}]\n${context.baziSummary}`).join('\n\n'),
+    };
+    contexts.forEach((context, index) => {
+        const number = index + 1;
+        extra[`person${number}Name`] = context.name;
+        extra[`person${number}BaziJson`] = context.baziJson;
+        extra[`person${number}BaziSummary`] = context.baziSummary;
+    });
+    return extra;
 }
 
 async function requestDeepSeekCompletion({

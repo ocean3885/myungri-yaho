@@ -20,6 +20,8 @@ type UpdateBody = {
   description?: unknown;
   enabled?: unknown;
   sortOrder?: unknown;
+  priceKrw?: unknown;
+  subjectCount?: unknown;
   config?: unknown;
 };
 
@@ -61,6 +63,10 @@ export async function POST(request: NextRequest) {
   const description = normalizeOptionalText(body.description);
   const enabled = typeof body.enabled === 'boolean' ? body.enabled : true;
   const sortOrder = normalizeSortOrder(body.sortOrder);
+  const priceKrw = normalizePriceKrw(body.priceKrw);
+  if (priceKrw === null) return invalidPriceResponse();
+  const subjectCount = normalizeSubjectCount(body.subjectCount);
+  if (subjectCount === null) return invalidSubjectCountResponse();
 
   try {
     const adminSupabase = await createAdminClient();
@@ -98,6 +104,8 @@ export async function POST(request: NextRequest) {
         prompt_setting_key: key,
         enabled,
         sort_order: sortOrder,
+        price_krw: priceKrw,
+        subject_count: subjectCount,
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'key',
@@ -115,6 +123,8 @@ export async function POST(request: NextRequest) {
       description,
       enabled,
       sortOrder,
+      priceKrw,
+      subjectCount,
       config: value,
     });
   } catch (error) {
@@ -180,6 +190,10 @@ export async function PATCH(request: NextRequest) {
     const description = normalizeOptionalText(body.description);
     const enabled = typeof body.enabled === 'boolean' ? body.enabled : true;
     const sortOrder = normalizeSortOrder(body.sortOrder);
+    const priceKrw = normalizePriceKrw(body.priceKrw);
+    if (priceKrw === null) return invalidPriceResponse();
+    const subjectCount = normalizeSubjectCount(body.subjectCount);
+    if (subjectCount === null) return invalidSubjectCountResponse();
 
     try {
       const adminSupabase = await createAdminClient();
@@ -224,6 +238,8 @@ export async function PATCH(request: NextRequest) {
           prompt_setting_key: nextKey,
           enabled,
           sort_order: sortOrder,
+          price_krw: priceKrw,
+          subject_count: subjectCount,
           updated_at: new Date().toISOString(),
         }, {
           onConflict: 'key',
@@ -250,6 +266,8 @@ export async function PATCH(request: NextRequest) {
         description,
         enabled,
         sortOrder,
+        priceKrw,
+        subjectCount,
         config: value,
       });
     } catch (error) {
@@ -285,6 +303,10 @@ export async function PATCH(request: NextRequest) {
     const description = normalizeOptionalText(body.description);
     const enabled = typeof body.enabled === 'boolean' ? body.enabled : true;
     const sortOrder = normalizeSortOrder(body.sortOrder);
+    const priceKrw = normalizePriceKrw(body.priceKrw);
+    if (priceKrw === null) return invalidPriceResponse();
+    const subjectCount = normalizeSubjectCount(body.subjectCount);
+    if (subjectCount === null) return invalidSubjectCountResponse();
     const { error: consultationTypeError } = await adminSupabase
       .from('consultation_types')
       .upsert({
@@ -294,6 +316,8 @@ export async function PATCH(request: NextRequest) {
         prompt_setting_key: body.key,
         enabled,
         sort_order: sortOrder,
+        price_krw: priceKrw,
+        subject_count: subjectCount,
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'key',
@@ -311,6 +335,8 @@ export async function PATCH(request: NextRequest) {
       description,
       enabled,
       sortOrder,
+      priceKrw,
+      subjectCount,
       config: value,
     });
   } catch (error) {
@@ -390,4 +416,27 @@ function normalizeSortOrder(value: unknown) {
   if (!Number.isFinite(number)) return 100;
 
   return Math.floor(Math.min(9999, Math.max(0, number)));
+}
+
+function normalizePriceKrw(value: unknown) {
+  const number = typeof value === 'number' ? value : Number(value);
+  if (!Number.isInteger(number) || number < 0 || number > 10_000_000) return null;
+  if (number > 0 && number < 100) return null;
+  return number;
+}
+
+function invalidPriceResponse() {
+  return NextResponse.json(
+    { message: '가격은 무료인 경우 0원, 유료인 경우 100원 이상 10,000,000원 이하로 입력해주세요.' },
+    { status: 400 },
+  );
+}
+
+function normalizeSubjectCount(value: unknown) {
+  const number = typeof value === 'number' ? value : Number(value);
+  return Number.isInteger(number) && number >= 1 && number <= 4 ? number : null;
+}
+
+function invalidSubjectCountResponse() {
+  return NextResponse.json({ message: '필요 인원은 1명 이상 4명 이하로 입력해주세요.' }, { status: 400 });
 }

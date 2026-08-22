@@ -74,6 +74,14 @@ export default async function ArchiveDetailPage({ params }: { params: Promise<{ 
 
     const consultation = data as ConsultationDetail;
     const baziResult = consultation.bazi_result || {};
+    const { data: storedSubjects } = await adminSupabase
+        .from('consultation_subjects')
+        .select('position, subject_name, bazi_result')
+        .eq('consultation_id', consultation.id)
+        .order('position', { ascending: true });
+    const subjects = storedSubjects?.length
+        ? storedSubjects.map((subject) => ({ name: subject.subject_name, result: subject.bazi_result as BaziResult }))
+        : [{ name: consultation.subject_name || '상담 대상', result: baziResult }];
 
     return (
         <section className="pt-1">
@@ -115,7 +123,12 @@ export default async function ArchiveDetailPage({ params }: { params: Promise<{ 
                 </div>
 
                 <div className="space-y-4 px-4 py-4">
-                    <BaziPillarsTable result={baziResult} />
+                    {subjects.map((subject, index) => (
+                        <section key={`${subject.name}-${index}`} className="rounded-[10px] border border-[#eee2d6] bg-white px-3 py-3">
+                            {subjects.length > 1 && <h3 className="mb-3 text-[14px] font-semibold text-[#171553]">인물 {index + 1} · {subject.name}</h3>}
+                            <BaziPillarsTable result={subject.result} />
+                        </section>
+                    ))}
 
                     <section className="rounded-[10px] border border-[#eee2d6] bg-[#fffdf9] px-4 py-4">
                         <h3 className="text-[15px] font-semibold text-[#2a2018]">상담 결과</h3>

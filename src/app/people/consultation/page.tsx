@@ -17,10 +17,10 @@ export default async function ConsultationConfirmationPage({ searchParams }: Pro
 
   const { type } = await searchParams;
   const adminSupabase = await createAdminClient();
-  const [consultationType, userResult, walletResult] = await Promise.all([
+  const [consultationType, userResult, peopleResult] = await Promise.all([
     getConsultationTypeByKey(adminSupabase, type),
     adminSupabase.from('users').select('role').eq('id', userId).maybeSingle(),
-    adminSupabase.from('coin_wallets').select('balance').eq('user_id', userId).maybeSingle(),
+    adminSupabase.from('people').select('id, name, relation, gender, calendar, birth_date, birth_time, birth_params, bazi_result').eq('user_id', userId).order('created_at', { ascending: false }).limit(30),
   ]);
 
   if (!consultationType.enabled) redirect('/people');
@@ -33,9 +33,20 @@ export default async function ConsultationConfirmationPage({ searchParams }: Pro
         key: consultationType.key,
         name: consultationType.name,
         description: consultationType.description,
-        coinPrice: consultationType.coinPrice,
+        priceKrw: consultationType.priceKrw,
+        subjectCount: consultationType.subjectCount,
       }}
-      balance={walletResult.data?.balance ?? 0}
+      savedPeople={(peopleResult.data || []).map((person) => ({
+        id: person.id,
+        name: person.name,
+        relation: person.relation,
+        gender: person.gender,
+        calendar: person.calendar,
+        birthDate: person.birth_date,
+        birthTime: person.birth_time,
+        birthParams: person.birth_params,
+        baziResult: person.bazi_result,
+      }))}
       isAdmin={isAdmin}
     />
   );

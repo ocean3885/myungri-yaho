@@ -35,6 +35,8 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
   const [newConsultationDescription, setNewConsultationDescription] = useState('');
   const [newConsultationEnabled, setNewConsultationEnabled] = useState(true);
   const [newConsultationSortOrder, setNewConsultationSortOrder] = useState(100);
+  const [newConsultationPriceKrw, setNewConsultationPriceKrw] = useState(990);
+  const [newConsultationSubjectCount, setNewConsultationSubjectCount] = useState(1);
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState<SaveStatus>(null);
 
@@ -79,6 +81,8 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
           description: newConsultationDescription,
           enabled: newConsultationEnabled,
           sortOrder: newConsultationSortOrder,
+          priceKrw: newConsultationPriceKrw,
+          subjectCount: newConsultationSubjectCount,
           config: nextConfig,
         }),
       });
@@ -95,6 +99,8 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
         description: data.description,
         enabled: data.enabled,
         sortOrder: data.sortOrder,
+        priceKrw: data.priceKrw,
+        subjectCount: data.subjectCount,
         config: data.config,
         updatedAt: null,
       };
@@ -107,6 +113,8 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
       setNewConsultationDescription('');
       setNewConsultationEnabled(true);
       setNewConsultationSortOrder(100);
+      setNewConsultationPriceKrw(990);
+      setNewConsultationSubjectCount(1);
       setStatus({ type: 'success', message: data.message || '상담종류 프롬프트를 추가했습니다.' });
       router.refresh();
     } catch (error) {
@@ -140,6 +148,8 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
           description: selectedSetting.description,
           enabled: selectedSetting.enabled,
           sortOrder: selectedSetting.sortOrder,
+          priceKrw: selectedSetting.priceKrw,
+          subjectCount: selectedSetting.subjectCount,
           config: nextConfig,
         }),
       });
@@ -155,6 +165,8 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
         description: data.description ?? selectedSetting.description,
         enabled: typeof data.enabled === 'boolean' ? data.enabled : selectedSetting.enabled,
         sortOrder: typeof data.sortOrder === 'number' ? data.sortOrder : selectedSetting.sortOrder,
+        priceKrw: typeof data.priceKrw === 'number' ? data.priceKrw : selectedSetting.priceKrw,
+        subjectCount: typeof data.subjectCount === 'number' ? data.subjectCount : selectedSetting.subjectCount,
         updatedAt: new Date().toISOString(),
       });
       setStatus({ type: 'success', message: data.message || '프롬프트 설정을 저장했습니다.' });
@@ -187,6 +199,8 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
           description: selectedSetting.description,
           enabled: selectedSetting.enabled,
           sortOrder: selectedSetting.sortOrder,
+          priceKrw: selectedSetting.priceKrw,
+          subjectCount: selectedSetting.subjectCount,
           config: formConfig,
         }),
       });
@@ -203,6 +217,8 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
         description: data.description ?? selectedSetting.description,
         enabled: typeof data.enabled === 'boolean' ? data.enabled : selectedSetting.enabled,
         sortOrder: typeof data.sortOrder === 'number' ? data.sortOrder : selectedSetting.sortOrder,
+        priceKrw: typeof data.priceKrw === 'number' ? data.priceKrw : selectedSetting.priceKrw,
+        subjectCount: typeof data.subjectCount === 'number' ? data.subjectCount : selectedSetting.subjectCount,
         config: data.config,
         updatedAt: new Date().toISOString(),
       };
@@ -318,6 +334,8 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
                 </span>
               </span>
               <span className="mt-1 block break-all text-[15px] text-[#8a7a68]">{setting.key}</span>
+              <span className="mt-1 block text-[13px] font-semibold text-[#b06b16]">{setting.priceKrw === 0 ? '무료' : `${setting.priceKrw.toLocaleString('ko-KR')}원`}</span>
+              <span className="mt-0.5 block text-[12px] text-[#8467c8]">필요 인원 {setting.subjectCount}명</span>
             </button>
           ))}
         </div>
@@ -350,6 +368,28 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
               placeholder="사용자에게 보여줄 상담 설명"
               className={textareaClassName}
             />
+          </label>
+          <label className="mt-3 block">
+            <span className="mb-2 block text-[15px] font-semibold text-[#66594d]">가격 (원)</span>
+            <input
+              type="number"
+              value={newConsultationPriceKrw}
+              onChange={(event) => setNewConsultationPriceKrw(Number(event.target.value))}
+              min={0}
+              max={10000000}
+              step={100}
+              className={inputClassName}
+            />
+            <span className="mt-1 block text-[12px] text-[#8a7a68]">무료 상담은 0원, 유료 상담은 100원 이상</span>
+          </label>
+          <label className="mt-3 block">
+            <span className="mb-2 block text-[15px] font-semibold text-[#66594d]">필요 인원</span>
+            <select value={newConsultationSubjectCount} onChange={(event) => setNewConsultationSubjectCount(Number(event.target.value))} className={inputClassName}>
+              <option value={1}>1명 (개인 상담)</option>
+              <option value={2}>2명 (궁합 상담)</option>
+              <option value={3}>3명</option>
+              <option value={4}>4명</option>
+            </select>
           </label>
           <div className="mt-3 grid grid-cols-[1fr_96px] items-end gap-3">
             <label className="flex h-11 items-center gap-2 text-[15px] font-semibold text-[#66594d]">
@@ -397,7 +437,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
               여러 분석 프롬프트를 실행한 뒤 최종 편집 프롬프트에서 하나의 상담문으로 통합합니다.
             </p>
             <p className="mt-2 max-w-5xl text-[15px] leading-[1.6] text-[#8a7a68]">
-              사용 가능 변수: {'{{baziJson}}'}, {'{{baziSummary}}'}, {'{{gender}}'}, {'{{yearPillar}}'}, {'{{monthPillar}}'}, {'{{dayPillar}}'}, {'{{timePillar}}'}, {'{{currentYear}}'}, {'{{previousDaewoon}}'}, {'{{previousDaewoonYearRange}}'}, {'{{currentDaewoon}}'}, {'{{currentDaewoonYearRange}}'}, {'{{nextDaewoon}}'}, {'{{nextDaewoonYearRange}}'}, {'{{currentSewoon}}'}, {'{{previousStepResults}}'}, {'{{stepResults}}'}
+              사용 가능 변수: {'{{baziJson}}'}, {'{{baziSummary}}'}, {'{{subjectsJson}}'}, {'{{subjectsSummary}}'}, {'{{person1Name}}'}, {'{{person1BaziSummary}}'}, {'{{person2Name}}'}, {'{{person2BaziSummary}}'}, {'{{gender}}'}, {'{{yearPillar}}'}, {'{{monthPillar}}'}, {'{{dayPillar}}'}, {'{{timePillar}}'}, {'{{currentYear}}'}, {'{{previousStepResults}}'}, {'{{stepResults}}'}
             </p>
           </div>
 
@@ -469,11 +509,20 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
         {selectedSetting && (
           <div className="mt-5 rounded-[10px] border border-[#eee2d6] bg-[#fffdf9] px-4 py-4">
             <h4 className="text-[18px] font-semibold text-[#171553]">상담종류 운영 정보</h4>
-            <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_160px]">
+            <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_180px_160px_160px]">
               <TextInput
                 label="표시 이름"
                 value={selectedSetting.name}
                 onChange={(value) => updateSelectedSetting({ name: value })}
+              />
+              <NumberInput
+                label="가격"
+                labelNote="원"
+                value={selectedSetting.priceKrw}
+                step="100"
+                min="0"
+                max="10000000"
+                onChange={(value) => updateSelectedSetting({ priceKrw: value })}
               />
               <NumberInput
                 label="정렬 순서"
@@ -483,6 +532,12 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
                 max="9999"
                 onChange={(value) => updateSelectedSetting({ sortOrder: value })}
               />
+              <label className="block">
+                <span className="mb-2 block text-[15px] font-semibold text-[#66594d]">필요 인원</span>
+                <select value={selectedSetting.subjectCount} onChange={(event) => updateSelectedSetting({ subjectCount: Number(event.target.value) })} className={inputClassName}>
+                  <option value={1}>1명</option><option value={2}>2명</option><option value={3}>3명</option><option value={4}>4명</option>
+                </select>
+              </label>
             </div>
             <div className="mt-4">
               <Textarea

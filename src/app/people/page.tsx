@@ -5,8 +5,9 @@ import { createAdminClient } from '@/utils/supabase/server';
 import PeopleClient from './PeopleClient';
 import type { SavedPerson } from './PeopleClient';
 
-export default async function PeoplePage() {
+export default async function PeoplePage({ searchParams }: { searchParams: Promise<{ consultation?: string }> }) {
   const session = await auth();
+  const { consultation } = await searchParams;
   let initialPeople: SavedPerson[] = [];
   let consultationTypes: ConsultationType[] = [];
 
@@ -49,8 +50,10 @@ export default async function PeoplePage() {
         key: type.key,
         name: type.name,
         description: type.description,
-        coinPrice: type.coinPrice,
+        priceKrw: type.priceKrw,
+        subjectCount: type.subjectCount,
       }))}
+      selectedConsultationKey={consultation || null}
     />
   );
 }

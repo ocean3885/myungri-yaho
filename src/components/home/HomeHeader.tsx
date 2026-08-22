@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Coins, LogIn } from 'lucide-react';
+import { LogIn } from 'lucide-react';
 
 type SessionResponse = {
   user?: unknown;
@@ -11,7 +11,6 @@ type SessionResponse = {
 
 export default function HomeHeader() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  const [coinBalance, setCoinBalance] = useState<number | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -23,19 +22,6 @@ export default function HomeHeader() {
           const authenticated = Boolean(session?.user);
           setIsAuthenticated(authenticated);
 
-          if (authenticated) {
-            fetch('/api/coins')
-              .then((response) => {
-                if (!response.ok) throw new Error('코인 잔액 조회 실패');
-                return response.json();
-              })
-              .then((data: { balance?: number }) => {
-                if (isMounted) setCoinBalance(data.balance ?? 0);
-              })
-              .catch(() => {
-                if (isMounted) setCoinBalance(0);
-              });
-          }
         }
       })
       .catch(() => {
@@ -44,16 +30,8 @@ export default function HomeHeader() {
         }
       });
 
-    const handleBalanceUpdate = (event: Event) => {
-      const balance = (event as CustomEvent<{ balance: number }>).detail?.balance;
-      if (typeof balance === 'number') setCoinBalance(balance);
-    };
-
-    window.addEventListener('coin-balance-updated', handleBalanceUpdate);
-
     return () => {
       isMounted = false;
-      window.removeEventListener('coin-balance-updated', handleBalanceUpdate);
     };
   }, []);
 
@@ -69,16 +47,6 @@ export default function HomeHeader() {
           className="h-auto w-[150px] object-contain max-[480px]:w-[132px]"
         />
       </Link>
-      {isAuthenticated === true && (
-        <Link
-          href="/coins"
-          className="flex h-8 shrink-0 items-center gap-1.5 rounded-[8px] border border-[#ead8c6] bg-white px-2.5 text-[#171553] transition hover:bg-[#fff8f0]"
-          aria-label={`보유 코인 ${coinBalance ?? 0}개, 충전 페이지로 이동`}
-        >
-          <Coins className="h-4 w-4 text-[#b06b16]" strokeWidth={2} />
-          <span className="text-[13px] font-semibold tabular-nums">{coinBalance ?? 0}</span>
-        </Link>
-      )}
       {isAuthenticated === false && (
         <Link
           href="/auth/signin"
