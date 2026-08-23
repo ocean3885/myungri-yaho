@@ -1,19 +1,16 @@
 import React from 'react';
 import { auth } from '@/auth';
-import { listConsultationTypes, type ConsultationType } from '@/lib/consultation-types';
 import { createAdminClient } from '@/utils/supabase/server';
 import PeopleClient from './PeopleClient';
 import type { SavedPerson } from './PeopleClient';
 
-export default async function PeoplePage({ searchParams }: { searchParams: Promise<{ consultation?: string }> }) {
+export default async function PeoplePage({ searchParams }: { searchParams: Promise<{ edit?: string }> }) {
   const session = await auth();
-  const { consultation } = await searchParams;
+  const { edit } = await searchParams;
   let initialPeople: SavedPerson[] = [];
-  let consultationTypes: ConsultationType[] = [];
 
   try {
     const adminSupabase = await createAdminClient();
-    consultationTypes = await listConsultationTypes(adminSupabase, true);
 
     if (session?.user?.id) {
       const { data, error } = await adminSupabase
@@ -21,7 +18,7 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
         .select('id, name, relation, gender, calendar, birth_date, birth_time, birth_params, bazi_result, created_at')
         .eq('user_id', session.user.id)
         .order('created_at', { ascending: false })
-        .limit(30);
+        .limit(100);
 
       if (!error && data) {
         initialPeople = data.map((person) => ({
@@ -46,14 +43,7 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
     <PeopleClient
       isAuthenticated={Boolean(session?.user?.id)}
       initialPeople={initialPeople}
-      consultationTypes={consultationTypes.map((type) => ({
-        key: type.key,
-        name: type.name,
-        description: type.description,
-        priceKrw: type.priceKrw,
-        subjectCount: type.subjectCount,
-      }))}
-      selectedConsultationKey={consultation || null}
+      editPerson={initialPeople.find((person) => person.id === edit) || null}
     />
   );
 }

@@ -26,7 +26,7 @@ export default function ConsultationConfirmationClient({ consultationType, saved
   const [draft, setDraft] = useState<ConsultationDraft | null>();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [agreed, setAgreed] = useState(false);
-  const [additionalPersonIds, setAdditionalPersonIds] = useState<string[]>([]);
+  const [selectedPersonIds, setSelectedPersonIds] = useState<string[]>([]);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -37,7 +37,7 @@ export default function ConsultationConfirmationClient({ consultationType, saved
           const parsed = JSON.parse(storedDraft) as ConsultationDraft;
           if (parsed.result?.four_pillars && parsed.subjectName) {
             setDraft(parsed);
-            setAdditionalPersonIds(parsed.additionalSubjects?.map((subject) => subject.personId || '') || []);
+            setSelectedPersonIds([parsed.personId || '', ...(parsed.additionalSubjects?.map((subject) => subject.personId || '') || [])]);
             return;
           }
         }
@@ -114,33 +114,39 @@ export default function ConsultationConfirmationClient({ consultationType, saved
     }
   }
 
-  const requiredAdditionalCount = Math.max(0, consultationType.subjectCount - 1);
   const selectablePeople = savedPeople.filter((person) => person.baziResult?.four_pillars && person.birthParams);
-  const hasAllSubjects = requiredAdditionalCount === 0 || (
-    additionalPersonIds.length === requiredAdditionalCount
-    && additionalPersonIds.every(Boolean)
-    && new Set([draft?.personId, ...additionalPersonIds].filter(Boolean)).size === [draft?.personId, ...additionalPersonIds].filter(Boolean).length
-  );
+  const selectedIds = Array.from({ length: consultationType.subjectCount }, (_, index) => selectedPersonIds[index] || '');
+  const hasAllSubjects = selectedIds.every(Boolean) && new Set(selectedIds).size === selectedIds.length;
 
   function prepareDraft() {
-    if (!draft || !hasAllSubjects) return null;
-    const additionalSubjects = additionalPersonIds.map((id) => selectablePeople.find((person) => person.id === id)).filter((person): person is SavedPerson => Boolean(person)).map((person) => ({
+    if (!hasAllSubjects) return null;
+    const selectedPeople = selectedIds.map((id) => selectablePeople.find((person) => person.id === id));
+    if (selectedPeople.some((person) => !person)) return null;
+
+    const subjects = selectedPeople.filter((person): person is SavedPerson => Boolean(person)).map((person) => ({
       personId: person.id,
       subjectName: person.name,
       result: person.baziResult,
       birthParams: person.birthParams,
     }));
-    if (additionalSubjects.length !== requiredAdditionalCount) return null;
-    return { ...draft, additionalSubjects };
+
+    const [primarySubject, ...additionalSubjects] = subjects;
+    return { ...primarySubject, additionalSubjects };
   }
 
-  function updateAdditionalPerson(index: number, personId: string) {
-    setAdditionalPersonIds((current) => Array.from({ length: requiredAdditionalCount }, (_, itemIndex) => itemIndex === index ? personId : current[itemIndex] || ''));
+  function updateSelectedPerson(index: number, personId: string) {
+    window.sessionStorage.removeItem('bazi-consultation-draft');
+    setDraft(null);
+    setSelectedPersonIds((current) => Array.from({ length: consultationType.subjectCount }, (_, itemIndex) => itemIndex === index ? personId : current[itemIndex] || ''));
+  }
+
+  function getSelectablePeopleForIndex(index: number) {
+    return selectablePeople.filter((person) => !selectedIds.some((id, selectedIndex) => selectedIndex !== index && id === person.id));
   }
 
   return <>
     <header className="flex h-12 items-center justify-between">
-      <Link href={`/people?consultation=${encodeURIComponent(consultationType.key)}`} className="flex h-10 w-10 items-center justify-center rounded-full text-[#171553]" aria-label="상담 대상 입력으로 돌아가기"><ChevronLeft className="h-7 w-7" strokeWidth={2.2} /></Link>
+      <Link href="/consultations" className="flex h-10 w-10 items-center justify-center rounded-full text-[#171553]" aria-label="상담 선택으로 돌아가기"><ChevronLeft className="h-7 w-7" strokeWidth={2.2} /></Link>
       <h1 className="text-[18px] font-semibold text-[#111111]">상담 신청 확인</h1><span className="h-10 w-10" />
     </header>
     <main className="mt-5 space-y-4">
@@ -149,20 +155,33 @@ export default function ConsultationConfirmationClient({ consultationType, saved
         {consultationType.description && <p className="mt-2 break-keep text-[13px] leading-[1.65] text-[#66594d]">{consultationType.description}</p>}
         {draft && <p className="mt-4 rounded-[8px] bg-[#FEFAF5] px-3 py-2 text-[13px] text-[#493c31]">상담 대상: <strong>{draft.subjectName}</strong></p>}
       </section>
-      {requiredAdditionalCount > 0 && <section className="rounded-[12px] border border-[#ead8c6] bg-white px-5 py-5">
-        <h2 className="text-[16px] font-semibold text-[#171553]">함께 상담할 인물을 선택해주세요</h2>
-        <p className="mt-1 text-[12px] leading-5 text-[#76695d]">첫 번째 인물과 다른 저장된 인물을 선택해야 합니다.</p>
-        <div className="mt-4 space-y-3">
-          {Array.from({ length: requiredAdditionalCount }, (_, index) => <label key={index} className="block">
-            <span className="mb-1.5 block text-[12px] font-semibold text-[#66594d]">{index + 2}번째 인물</span>
-            <select value={additionalPersonIds[index] || ''} onChange={(event) => updateAdditionalPerson(index, event.target.value)} className="h-12 w-full rounded-[9px] border border-[#ead8c6] bg-white px-3 text-[14px] text-[#2a2018] outline-none focus:border-[#191450]">
-              <option value="">인물을 선택하세요</option>
-              {selectablePeople.map((person) => <option key={person.id} value={person.id} disabled={person.id === draft?.personId || additionalPersonIds.some((id, selectedIndex) => selectedIndex !== index && id === person.id)}>{person.name} · {person.relation} · {person.birthDate}</option>)}
-            </select>
-          </label>)}
-        </div>
-        {selectablePeople.length < requiredAdditionalCount && <p className="mt-3 rounded-[8px] bg-[#fff2ec] px-3 py-2 text-[12px] leading-5 text-[#a05738]">저장된 인물이 부족합니다. <Link href="/people" className="font-semibold underline">인물 페이지에서 상대방 정보를 먼저 저장해주세요.</Link></p>}
-      </section>}
+
+      <section className="rounded-[12px] border border-[#ead8c6] bg-white px-5 py-5">
+        <h2 className="text-[16px] font-semibold text-[#171553]">상담할 인물을 선택해주세요</h2>
+        <p className="mt-1 text-[12px] leading-5 text-[#76695d]">인물 등록 페이지에 저장된 인물 중에서 선택합니다. 목록에 없다면 먼저 등록해주세요.</p>
+        {selectablePeople.length > 0 ? (
+          <>
+            <div className="mt-4 space-y-3">
+              {Array.from({ length: consultationType.subjectCount }, (_, index) => <label key={index} className="block">
+                <span className="mb-1.5 block text-[12px] font-semibold text-[#66594d]">{consultationType.subjectCount === 1 ? '상담 인물' : `${index + 1}번째 인물`}</span>
+                <select value={selectedIds[index]} onChange={(event) => updateSelectedPerson(index, event.target.value)} className="h-12 w-full rounded-[9px] border border-[#ead8c6] bg-white px-3 text-[14px] text-[#2a2018] outline-none focus:border-[#191450]">
+                  <option value="">인물을 선택하세요</option>
+                  {getSelectablePeopleForIndex(index).map((person) => <option key={person.id} value={person.id}>{person.name} · {person.relation} · {person.birthDate}</option>)}
+                </select>
+              </label>)}
+            </div>
+            {selectablePeople.length < consultationType.subjectCount && <p className="mt-3 rounded-[8px] bg-[#fff2ec] px-3 py-2 text-[12px] leading-5 text-[#a05738]">이 상담에 필요한 인물이 부족합니다. <Link href="/people" className="font-semibold underline">인물 등록 페이지에서 추가로 등록해주세요.</Link></p>}
+          </>
+        ) : (
+          <div className="mt-4 rounded-[10px] border border-dashed border-[#e5d2bd] bg-[#fffdf9] px-4 py-5 text-center">
+            <p className="text-[14px] font-semibold text-[#171553]">상담할 인물이 없습니다</p>
+            <p className="mt-1 break-keep text-[12px] leading-5 text-[#76695d]">인물 등록 페이지에서 생년월일시를 먼저 저장한 뒤 상담을 진행해주세요.</p>
+            <Link href="/people" className="font-display mx-auto mt-4 flex h-10 w-fit items-center justify-center rounded-[9px] bg-[#191450] px-4 text-[13px] font-medium text-white">
+              인물 등록하기
+            </Link>
+          </div>
+        )}
+      </section>
       <section className="rounded-[12px] border border-[#ead8c6] bg-[#fffaf4] px-5 py-5"><div className="flex items-start gap-3">
         {isAdmin ? <ShieldCheck className="mt-0.5 h-6 w-6 shrink-0 text-[#357247]" /> : <CreditCard className="mt-0.5 h-6 w-6 shrink-0 text-[#b06b16]" />}
         <div><h2 className="text-[16px] font-semibold text-[#2a2018]">{isAdmin ? '운영자 상담' : '상담 1회 결제'}</h2><p className="mt-2 text-[20px] font-bold text-[#171553]">{isAdmin ? '결제 없음' : `${consultationType.priceKrw.toLocaleString('ko-KR')}원`}</p><p className="mt-1 text-[12px] leading-5 text-[#76695d]">선충전 없이 선택한 상담 1건에 대해서만 결제합니다.</p></div>
@@ -171,11 +190,10 @@ export default function ConsultationConfirmationClient({ consultationType, saved
         <input type="checkbox" checked={agreed} onChange={(event) => setAgreed(event.target.checked)} className="mt-1 h-4 w-4 accent-[#191450]" />
         <span><span className="font-semibold text-[#352b25]">구매 조건 및 콘텐츠 제공에 동의합니다.</span><br />결제 후 AI 상담 생성이 즉시 시작되며, 디지털 콘텐츠 제공이 시작된 이후에는 청약철회가 제한될 수 있음을 확인했습니다. <Link href="/terms" className="font-semibold text-[#6d4bc3] underline">이용약관</Link> · <Link href="/refund-policy" className="font-semibold text-[#6d4bc3] underline">환불정책</Link></span>
       </label>}
-      {draft === null && <p className="rounded-[10px] border border-[#f0d2c5] bg-[#fff2ec] px-4 py-3 text-[13px] text-[#a05738]">상담할 사주 정보를 찾을 수 없습니다. 인물 페이지에서 다시 확인해주세요.</p>}
       {message && <p className="rounded-[10px] bg-[#fff2ec] px-4 py-3 text-[13px] text-[#a05738]" role="alert">{message}</p>}
       <div className="grid grid-cols-2 gap-3">
         <button type="button" onClick={() => router.back()} className="font-display flex h-12 items-center justify-center rounded-[10px] border border-[#191450] bg-white text-[14px] font-medium text-[#191450]">취소</button>
-        <button type="button" onClick={confirmConsultation} disabled={!draft || !hasAllSubjects || isSubmitting || (!isAdmin && !agreed)} className="font-display flex h-12 items-center justify-center rounded-[10px] bg-[#191450] px-2 text-[14px] font-medium text-white disabled:cursor-not-allowed disabled:bg-[#cfc8bd]">{isSubmitting ? '처리 중...' : isAdmin ? '상담 시작' : `${consultationType.priceKrw.toLocaleString('ko-KR')}원 결제하기`}</button>
+        <button type="button" onClick={confirmConsultation} disabled={!hasAllSubjects || isSubmitting || (!isAdmin && !agreed)} className="font-display flex h-12 items-center justify-center rounded-[10px] bg-[#191450] px-2 text-[14px] font-medium text-white disabled:cursor-not-allowed disabled:bg-[#cfc8bd]">{isSubmitting ? '처리 중...' : isAdmin ? '상담 시작' : `${consultationType.priceKrw.toLocaleString('ko-KR')}원 결제하기`}</button>
       </div>
     </main>
   </>;

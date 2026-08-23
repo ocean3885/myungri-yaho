@@ -1,14 +1,14 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Check, ChevronLeft, Compass, LockKeyhole, Sparkles, Trash2, UserRound, X } from 'lucide-react';
+import { ChevronLeft, Compass } from 'lucide-react';
 
 import type { BaziResult, PillarKey } from '@/components/bazi/types';
 import BaziPillarsTable from '@/components/bazi/BaziPillarsTable';
 
-const birthHourOptions = Array.from({ length: 12 }, (_, index) => index);
+const birthHourOptions = Array.from({ length: 24 }, (_, index) => index);
 const birthMinuteOptions = Array.from({ length: 12 }, (_, index) => index * 5);
 const pillarOrder: Array<{ key: PillarKey; label: string }> = [
   { key: 'time', label: '시주' },
@@ -85,16 +85,7 @@ type FormState = {
 type Props = {
   isAuthenticated: boolean;
   initialPeople: SavedPerson[];
-  consultationTypes: ConsultationTypeOption[];
-  selectedConsultationKey: string | null;
-};
-
-export type ConsultationTypeOption = {
-  key: string;
-  name: string;
-  description: string | null;
-  priceKrw: number;
-  subjectCount: number;
+  editPerson: SavedPerson | null;
 };
 
 export type SavedPerson = {
@@ -150,26 +141,21 @@ function parseBirthMinute(value: string) {
   return Number(value.split(':')[1] || 0);
 }
 
-function getBirthPeriod(value: string) {
-  return parseBirthHour(value) >= 12 ? '오후' : '오전';
-}
-
 function getBirthHourOption(value: string) {
-  return String(parseBirthHour(value) % 12);
+  return String(parseBirthHour(value));
 }
 
 function formatBirthTime(value: string) {
   if (!value) return '시간 모름';
   const hour = parseBirthHour(value);
   const minute = parseBirthMinute(value);
-  return `${hour >= 12 ? '오후' : '오전'} ${hour % 12}시 ${minute}분`;
+  return `${hour}시 ${minute}분`;
 }
 
-function buildBirthTime(period: string, hourOption: string, minuteOption: string) {
+function buildBirthTime(hourOption: string, minuteOption: string) {
   const hour = Number(hourOption);
   const minute = Number(minuteOption);
-  const normalizedHour = period === '오후' ? hour + 12 : hour;
-  return `${String(normalizedHour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
 
 function buildPreview(form: FormState, baziResult: BaziResult, birthParams: NonNullable<BaziResult['birth_params']>): Preview {
@@ -312,22 +298,13 @@ function getSavedPersonPreview(person: SavedPerson, form: FormState) {
   return { ...buildPreview(form, { ...person.baziResult, birth_params: birthParams }, birthParams), personId: person.id };
 }
 
-function formatSavedPersonMeta(person: SavedPerson) {
-  return `${person.calendar} ${person.birthDate} ${person.birthTime || '시간 모름'} · ${person.gender}`;
-}
-
-export default function PeopleClient({ isAuthenticated, initialPeople, consultationTypes, selectedConsultationKey }: Props) {
+export default function PeopleClient({ isAuthenticated, initialPeople, editPerson }: Props) {
   const router = useRouter();
-  const previewSectionRef = useRef<HTMLElement>(null);
-  const shouldScrollToPreviewRef = useRef(false);
+  const editForm = editPerson ? getSavedPersonForm(editPerson) : null;
   const [people, setPeople] = useState(initialPeople);
-  const [isPeopleModalOpen, setIsPeopleModalOpen] = useState(false);
-  const [deletingPersonId, setDeletingPersonId] = useState('');
-  const [peopleMessageType, setPeopleMessageType] = useState<'success' | 'error'>('success');
-  const [peopleMessage, setPeopleMessage] = useState('');
-  const [loadMessage, setLoadMessage] = useState('');
-  const [form, setForm] = useState<FormState>(initialForm);
-  const [preview, setPreview] = useState<Preview | null>(null);
+  const [editingPersonId, setEditingPersonId] = useState(editPerson?.id || '');
+  const [form, setForm] = useState<FormState>(editForm || initialForm);
+  const [preview, setPreview] = useState<Preview | null>(editPerson && editForm ? getSavedPersonPreview(editPerson, editForm) : null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -335,84 +312,6 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
 
   const isValidBirthDate = useMemo(() => parseBirthDate(form.birthDate) !== null, [form.birthDate]);
   const canPreview = useMemo(() => form.name.trim().length > 0 && isValidBirthDate, [form.name, isValidBirthDate]);
-  const availableConsultationTypes = consultationTypes.length > 0
-    ? consultationTypes
-    : [{ key: 'free_basic', name: '기본 상담', description: '사주 원국을 바탕으로 기본 성향과 현재 운 흐름을 해석합니다.', priceKrw: 990, subjectCount: 1 }];
-  const selectedConsultationType = availableConsultationTypes.find((type) => type.key === selectedConsultationKey) || null;
-  const visibleConsultationTypes = selectedConsultationType ? [selectedConsultationType] : availableConsultationTypes;
-
-  useEffect(() => {
-    if (!selectedConsultationType) {
-      window.sessionStorage.removeItem('bazi-consultation-draft');
-      return;
-    }
-
-    const frame = window.requestAnimationFrame(() => {
-      try {
-        const storedDraft = window.sessionStorage.getItem('bazi-consultation-draft');
-        if (!storedDraft) return;
-
-        const parsed = JSON.parse(storedDraft) as {
-          form?: FormState;
-          preview?: Preview;
-          saveStatus?: 'idle' | 'saved' | 'error';
-          saveMessage?: string;
-          scrollY?: number;
-        };
-
-        if (!parsed.form || !parsed.preview?.baziResult?.four_pillars) return;
-
-        setForm(parsed.form);
-        setPreview(parsed.preview);
-        setSaveStatus(parsed.saveStatus || 'idle');
-        setSaveMessage(parsed.saveMessage || '');
-
-        window.requestAnimationFrame(() => {
-          window.scrollTo({ top: parsed.scrollY ?? 0, behavior: 'auto' });
-        });
-      } catch {
-        window.sessionStorage.removeItem('bazi-consultation-draft');
-      }
-    });
-
-    return () => window.cancelAnimationFrame(frame);
-  }, [selectedConsultationType]);
-
-  useEffect(() => {
-    if (!loadMessage) return;
-
-    const timer = window.setTimeout(() => {
-      setLoadMessage('');
-    }, 3000);
-
-    return () => window.clearTimeout(timer);
-  }, [loadMessage]);
-
-  useEffect(() => {
-    if (!isPeopleModalOpen) return;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [isPeopleModalOpen]);
-
-  useEffect(() => {
-    if (!preview || isPeopleModalOpen || !shouldScrollToPreviewRef.current) return;
-
-    shouldScrollToPreviewRef.current = false;
-    const frame = window.requestAnimationFrame(() => {
-      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      previewSectionRef.current?.scrollIntoView({
-        behavior: prefersReducedMotion ? 'auto' : 'smooth',
-        block: 'start',
-      });
-    });
-
-    return () => window.cancelAnimationFrame(frame);
-  }, [preview, isPeopleModalOpen]);
 
   const updateField = (key: keyof FormState, value: string) => {
     window.sessionStorage.removeItem('bazi-consultation-draft');
@@ -426,62 +325,23 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
     updateField('birthDate', value.replace(/\D/g, '').slice(0, 8));
   };
 
-  const updateBirthPeriod = (period: string) => {
-    updateField('birthTime', buildBirthTime(period, getBirthHourOption(form.birthTime), String(parseBirthMinute(form.birthTime))));
-  };
-
   const updateBirthHour = (hour: string) => {
-    updateField('birthTime', buildBirthTime(getBirthPeriod(form.birthTime), hour, String(parseBirthMinute(form.birthTime))));
+    updateField('birthTime', buildBirthTime(hour, String(parseBirthMinute(form.birthTime))));
   };
 
   const updateBirthMinute = (minute: string) => {
-    updateField('birthTime', buildBirthTime(getBirthPeriod(form.birthTime), getBirthHourOption(form.birthTime), minute));
+    updateField('birthTime', buildBirthTime(getBirthHourOption(form.birthTime), minute));
   };
 
-  const loadSavedPerson = (person: SavedPerson) => {
-    const savedForm = getSavedPersonForm(person);
-    const savedPreview = getSavedPersonPreview(person, savedForm);
-
-    window.sessionStorage.removeItem('bazi-consultation-draft');
-    shouldScrollToPreviewRef.current = Boolean(savedPreview);
-    setForm(savedForm);
-    setPreview(savedPreview);
-    setErrorMessage('');
-    setSaveStatus(savedPreview ? 'saved' : 'idle');
+  const cancelPreview = () => {
+    setForm(initialForm);
+    setEditingPersonId('');
+    setPreview(null);
+    setSaveStatus('idle');
     setSaveMessage('');
-    setPeopleMessage('');
-    setLoadMessage(savedPreview ? `${person.name}님의 사주 정보를 불러왔어요.` : `${person.name}님의 정보를 불러왔어요. 확인하기를 눌러 사주 정보를 볼 수 있어요.`);
-    setIsPeopleModalOpen(false);
-  };
-
-  const handleDeletePerson = async (person: SavedPerson) => {
-    if (deletingPersonId) return;
-
-    const confirmed = window.confirm(`${person.name}님의 저장된 인물 정보를 삭제할까요?`);
-    if (!confirmed) return;
-
-    setDeletingPersonId(person.id);
-    setPeopleMessageType('success');
-    setPeopleMessage('');
-
-    try {
-      const response = await fetch(`/api/people?id=${encodeURIComponent(person.id)}`, {
-        method: 'DELETE',
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || '인물 정보 삭제에 실패했습니다.');
-      }
-
-      setPeople((current) => current.filter((item) => item.id !== person.id));
-      setPeopleMessageType('success');
-      setPeopleMessage(data.message || '인물 정보를 삭제했습니다.');
-    } catch (error) {
-      setPeopleMessageType('error');
-      setPeopleMessage(error instanceof Error ? error.message : '인물 정보 삭제에 실패했습니다.');
-    } finally {
-      setDeletingPersonId('');
+    setErrorMessage('');
+    if (editPerson) {
+      router.replace('/people');
     }
   };
 
@@ -523,12 +383,14 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
     setSaveMessage('');
 
     try {
+      const isEditing = Boolean(editingPersonId);
       const response = await fetch('/api/people', {
-        method: 'POST',
+        method: isEditing ? 'PATCH' : 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          id: editingPersonId,
           name: preview.name,
           relation: preview.relation,
           gender: preview.gender,
@@ -546,10 +408,14 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
       }
 
       setSaveStatus('saved');
-      setSaveMessage(data.message || '인물 정보를 저장했습니다.');
+      setSaveMessage(data.message || (isEditing ? '인물 정보를 수정했습니다.' : '인물 정보를 저장했습니다.'));
       if (isSavedPerson(data.person)) {
         setPeople((current) => [data.person, ...current.filter((person) => person.id !== data.person.id)]);
         setPreview((current) => current ? { ...current, personId: data.person.id } : current);
+        setEditingPersonId(data.person.id);
+        if (isEditing) {
+          router.replace('/people');
+        }
       }
     } catch (error) {
       setSaveStatus('error');
@@ -557,40 +423,15 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
     }
   };
 
-  const openConsultationConfirmation = (consultationType: ConsultationTypeOption) => {
-    if (!preview || !isAuthenticated) return;
-
-    window.sessionStorage.setItem('bazi-consultation-draft', JSON.stringify({
-      result: preview.baziResult,
-      birthParams: preview.birthParams,
-      subjectName: preview.name,
-      personId: preview.personId,
-      form,
-      preview,
-      saveStatus: saveStatus === 'saving' ? 'idle' : saveStatus,
-      saveMessage,
-      scrollY: window.scrollY,
-    }));
-    router.push(`/people/consultation?type=${encodeURIComponent(consultationType.key)}`);
-  };
-
   return (
     <>
           <header className="flex h-12 items-center justify-between">
-            <Link href={selectedConsultationType ? '/consultations' : '/'} className="flex h-10 w-10 items-center justify-center rounded-full text-[#171553]">
+            <Link href="/" className="flex h-10 w-10 items-center justify-center rounded-full text-[#171553]">
               <ChevronLeft className="h-7 w-7" strokeWidth={2.2} />
             </Link>
-            <h1 className="text-[18px] font-semibold text-[#111111]">{selectedConsultationType ? '상담 대상 입력' : '인물 등록'}</h1>
+            <h1 className="text-[18px] font-semibold text-[#111111]">{editingPersonId ? '인물 수정' : '인물 등록'}</h1>
             <span className="h-10 w-10" />
           </header>
-
-          {selectedConsultationType && <section className="mt-4 rounded-[12px] border border-[#ded1f4] bg-[#f8f4ff] px-4 py-4">
-            <p className="text-[11px] font-semibold text-[#8467c8]">선택한 상담</p>
-            <div className="mt-1 flex items-start justify-between gap-3">
-              <div><h2 className="text-[17px] font-semibold text-[#171553]">{selectedConsultationType.name}</h2><p className="mt-1 text-[12px] leading-5 text-[#66594d]">{selectedConsultationType.description}</p></div>
-              <span className="shrink-0 text-[14px] font-bold text-[#b06b16]">{selectedConsultationType.priceKrw === 0 ? '무료' : `${selectedConsultationType.priceKrw.toLocaleString('ko-KR')}원`}</span>
-            </div>
-          </section>}
 
           <section className="mt-5 rounded-[12px] border border-[#ead8c6] bg-white px-4 py-3 shadow-[0_8px_24px_rgba(92,61,25,0.05)]">
             <div className="flex items-center justify-between gap-3">
@@ -599,21 +440,16 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
                   저장된 인물 {isAuthenticated ? `${people.length}명` : ''}
                 </h2>
                 <p className="mt-0.5 truncate text-[12px] text-[#777777]">
-                  {isAuthenticated ? '저장한 인물 정보를 불러올 수 있어요' : '로그인 후 저장 목록을 볼 수 있어요'}
+                  {isAuthenticated ? '저장한 인물 정보를 확인하고 관리할 수 있어요' : '로그인 후 저장 목록을 볼 수 있어요'}
                 </p>
               </div>
               {isAuthenticated ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPeopleMessage('');
-                    setIsPeopleModalOpen(true);
-                  }}
-                  disabled={people.length === 0}
+                <Link
+                  href="/people/manage"
                   className="font-display flex h-10 shrink-0 items-center justify-center rounded-[9px] border border-[#191450] bg-white px-4 text-[13px] font-medium text-[#191450] transition hover:bg-[#FEFAF5] disabled:cursor-not-allowed disabled:border-[#d8cec4] disabled:text-[#9a9088]"
                 >
-                  불러오기
-                </button>
+                  관리하기
+                </Link>
               ) : (
                 <Link
                   href="/auth/signin"
@@ -624,97 +460,6 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
               )}
             </div>
           </section>
-
-          {isPeopleModalOpen && (
-            <div className="fixed left-1/2 top-0 z-[80] flex h-dvh w-full max-w-[480px] -translate-x-1/2 items-center justify-center bg-black/45 px-5 py-6" role="dialog" aria-modal="true" aria-labelledby="saved-people-title">
-              <div className="flex max-h-[calc(100dvh-48px)] w-full max-w-[390px] flex-col overflow-hidden rounded-[12px] border border-[#ead8c6] bg-[#fffdf9] shadow-[0_24px_70px_rgba(24,17,11,0.28)]">
-                <div className="shrink-0 flex items-start justify-between gap-4 border-b border-[#eadfd4] px-5 py-4">
-                  <div>
-                    <h3 id="saved-people-title" className="text-[18px] font-semibold text-[#171553]">저장된 인물 불러오기</h3>
-                    <p className="mt-1 text-[12px] text-[#73675c]">선택한 인물 정보가 입력 폼에 채워집니다.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsPeopleModalOpen(false)}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[#7b6a5a] transition hover:bg-[#f6eee5]"
-                    aria-label="닫기"
-                  >
-                    <X className="h-5 w-5" strokeWidth={2} />
-                  </button>
-                </div>
-
-                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-                  {peopleMessage && (
-                    <p className={`mb-3 rounded-[8px] px-3 py-2 text-[12px] leading-[1.55] ${peopleMessageType === 'success'
-                      ? 'bg-[#eef8ef] text-[#357247]'
-                      : 'bg-[#fff2ec] text-[#a05738]'
-                      }`}>
-                      {peopleMessage}
-                    </p>
-                  )}
-                  {people.length > 0 ? (
-                    <div className="space-y-2">
-                      {people.map((person) => {
-                        const isCurrentForm = form.name === person.name && form.relation === person.relation;
-                        const isDeleting = deletingPersonId === person.id;
-
-                        return (
-                          <div key={person.id} className="flex min-h-[72px] items-center gap-2 rounded-[10px] border border-[#efe2d4] bg-white px-3 py-3 transition hover:border-[#dfc5aa] hover:bg-[#fff8f0]">
-                            <button
-                              type="button"
-                              onClick={() => loadSavedPerson(person)}
-                              disabled={Boolean(deletingPersonId)}
-                              className="flex min-w-0 flex-1 items-center gap-3 text-left disabled:cursor-wait disabled:opacity-60"
-                            >
-                              <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${isCurrentForm ? 'bg-[#191450] text-white' : 'bg-[#f1e6db] text-[#7d5a36]'}`}>
-                                {isCurrentForm ? <Check className="h-5 w-5" strokeWidth={2.3} /> : <UserRound className="h-5 w-5" strokeWidth={1.8} />}
-                              </span>
-                              <span className="min-w-0 flex-1">
-                                <span className="block truncate text-[15px] font-semibold text-[#171553]">
-                                  {person.name} · {person.relation}
-                                </span>
-                                <span className="mt-0.5 block truncate text-[12px] leading-5 text-[#555555]">
-                                  {formatSavedPersonMeta(person)}
-                                </span>
-                              </span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeletePerson(person)}
-                              disabled={Boolean(deletingPersonId)}
-                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] text-[#a05738] transition hover:bg-[#fff2ec] disabled:cursor-wait disabled:opacity-50"
-                              aria-label={`${person.name} 삭제`}
-                            >
-                              {isDeleting ? (
-                                <span className="text-[11px] font-semibold">...</span>
-                              ) : (
-                                <Trash2 className="h-4 w-4" strokeWidth={2} />
-                              )}
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="rounded-[10px] border border-dashed border-[#e5d2bd] bg-white px-4 py-8 text-center">
-                      <UserRound className="mx-auto h-7 w-7 text-[#b06b16]" strokeWidth={1.7} />
-                      <p className="mt-2 break-keep text-[13px] leading-[1.65] text-[#555555]">저장된 인물이 없습니다.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {loadMessage && (
-            <p
-              className="mt-4 rounded-[9px] border border-[#cfe7d2] bg-[#eef8ef] px-3 py-2 text-[13px] leading-[1.55] text-[#357247]"
-              role="status"
-              aria-live="polite"
-            >
-              {loadMessage}
-            </p>
-          )}
 
           <form id="person-form" onSubmit={handleSubmit} className="mt-5 space-y-4 scroll-mt-6">
             <label className="block">
@@ -787,16 +532,7 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
 
             <div className="block">
               <span className="mb-2 block text-[14px] font-medium text-[#222222]">태어난 시간</span>
-              <div className="grid grid-cols-3 gap-3">
-                <select
-                  value={getBirthPeriod(form.birthTime)}
-                  onChange={(event) => updateBirthPeriod(event.target.value)}
-                  className="h-12 w-full rounded-[10px] border border-[#ead8c6] bg-white px-3 text-[15px] text-[#111111] outline-none transition focus:border-[#191450]"
-                >
-                  <option>오전</option>
-                  <option>오후</option>
-                </select>
-
+              <div className="grid grid-cols-2 gap-3">
                 <select
                   value={getBirthHourOption(form.birthTime)}
                   onChange={(event) => updateBirthHour(event.target.value)}
@@ -835,17 +571,12 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
 
           {preview && (
             <section
-              ref={previewSectionRef}
               className="mt-6 scroll-mt-4 overflow-hidden rounded-[12px] border border-[#ead8c6] bg-white shadow-[0_16px_38px_rgba(58,42,29,0.08)]"
             >
               <header className="border-b border-[#eadfd4] bg-[#fffaf4] px-5 py-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="flex items-center gap-1.5 text-[12px] font-semibold text-[#b06b16]">
-                      <Sparkles className="h-3.5 w-3.5" strokeWidth={1.8} />
-                      명식 리포트
-                    </p>
-                    <h2 className="mt-1 text-[19px] font-semibold text-[#171553]">사주 정보 미리보기</h2>
+                    <h2 className="text-[19px] font-semibold text-[#171553]">사주 정보 미리보기</h2>
                   </div>
                   <span className="shrink-0 rounded-full border border-[#e5d2bd] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#7d5a36]">
                     {preview.relation}
@@ -905,25 +636,25 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
                 })()}
 
                 <section className="rounded-[10px] border border-[#eadfd4] bg-[#FEFAF5] px-4 py-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex min-w-0 items-start gap-2">
-                      <LockKeyhole className="mt-0.5 h-5 w-5 shrink-0 text-[#b06b16]" strokeWidth={2} />
-                      <div>
-                        <h3 className="text-[15px] font-semibold text-[#2a2018]">입력한 사주정보를 저장하세요</h3>
-                        <p className="mt-1 break-keep text-[12px] leading-[1.55] text-[#66594d]">다음에도 인물 목록에서 바로 불러올 수 있어요.</p>
-                      </div>
-                    </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={cancelPreview}
+                      className="font-display flex h-11 items-center justify-center rounded-[9px] border border-[#191450] bg-white px-4 text-[14px] font-medium text-[#191450] transition-colors hover:bg-[#fffaf4]"
+                    >
+                      취소하기
+                    </button>
                     {isAuthenticated ? (
                       <button
                         type="button"
                         onClick={handleSavePerson}
                         disabled={saveStatus === 'saving' || saveStatus === 'saved'}
-                        className="font-display flex h-10 shrink-0 cursor-pointer items-center justify-center rounded-[9px] border border-[#191450] bg-white px-4 text-[13px] font-medium text-[#191450] transition-colors hover:bg-[#fffaf4] disabled:cursor-not-allowed disabled:border-[#cfc8bd] disabled:bg-[#f4eee7] disabled:text-[#8b8178]"
+                        className="font-display flex h-11 cursor-pointer items-center justify-center rounded-[9px] bg-[#191450] px-4 text-[14px] font-medium text-white transition-colors hover:bg-[#24206a] disabled:cursor-not-allowed disabled:bg-[#cfc8bd]"
                       >
-                        {saveStatus === 'saving' ? '저장 중' : saveStatus === 'saved' ? '저장 완료' : '저장하기'}
+                        {saveStatus === 'saving' ? '저장 중' : saveStatus === 'saved' ? (editingPersonId ? '수정 완료' : '저장 완료') : (editingPersonId ? '수정 저장하기' : '저장하기')}
                       </button>
                     ) : (
-                      <Link href="/auth/signin" className="font-display flex h-10 shrink-0 items-center rounded-[9px] border border-[#191450] bg-white px-4 text-[13px] font-medium text-[#191450]">
+                      <Link href="/auth/signin" className="font-display flex h-11 items-center justify-center rounded-[9px] bg-[#191450] px-4 text-[14px] font-medium text-white">
                         저장하기
                       </Link>
                     )}
@@ -938,35 +669,6 @@ export default function PeopleClient({ isAuthenticated, initialPeople, consultat
                   )}
                 </section>
 
-                <section className="rounded-[10px] border border-[#eadfd4] bg-white px-4 py-4">
-                  <h3 className="text-[16px] font-semibold text-[#171553]">상담 종류</h3>
-                  <p className="mt-1 text-[12px] leading-[1.55] text-[#66594d]">상담 내용과 비용을 확인한 후 진행하세요.</p>
-                  <div className="mt-3 divide-y divide-[#eee2d6] border-y border-[#eee2d6]">
-                    {visibleConsultationTypes.map((type) => (
-                      <article key={type.key} className="flex items-center gap-3 py-3">
-                        <div className="min-w-0 flex-1">
-                          <h4 className="text-[14px] font-semibold text-[#2a2018]">{type.name}</h4>
-                          {type.description && <p className="mt-1 break-keep text-[12px] leading-[1.5] text-[#66594d]">{type.description}</p>}
-                          <p className="mt-1 text-[12px] font-semibold text-[#b06b16]">{type.priceKrw.toLocaleString('ko-KR')}원</p>
-                          {type.subjectCount > 1 && <p className="mt-0.5 text-[11px] text-[#8467c8]">{type.subjectCount}인 상담</p>}
-                        </div>
-                        {isAuthenticated ? (
-                          <button
-                            type="button"
-                            onClick={() => openConsultationConfirmation(type)}
-                            className="font-display flex h-10 shrink-0 items-center rounded-[9px] bg-[#191450] px-4 text-[13px] font-medium text-white transition hover:bg-[#24206a]"
-                          >
-                            상담하기
-                          </button>
-                        ) : (
-                          <Link href="/auth/signin" className="font-display flex h-10 shrink-0 items-center rounded-[9px] bg-[#191450] px-4 text-[13px] font-medium text-white">
-                            로그인
-                          </Link>
-                        )}
-                      </article>
-                    ))}
-                  </div>
-                </section>
               </div>
             </section>
           )}

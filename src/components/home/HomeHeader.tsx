@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { LogIn } from 'lucide-react';
 
 type SessionResponse = {
   user?: unknown;
@@ -36,7 +35,7 @@ export default function HomeHeader() {
   }, []);
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between gap-2 bg-[#FEFAF5]/95 px-5 pt-1 backdrop-blur max-[480px]:h-14 max-[480px]:px-4 max-[480px]:pt-0">
+    <header className="relative flex h-16 shrink-0 items-center justify-center bg-[#FEFAF5]/95 px-5 pt-1 backdrop-blur max-[480px]:h-14 max-[480px]:px-4 max-[480px]:pt-0">
       <Link href="/" className="min-w-0" aria-label="홈으로 이동">
         <Image
           src="/images/yahologo3.png"
@@ -44,17 +43,17 @@ export default function HomeHeader() {
           width={180}
           height={48}
           priority
-          className="h-auto w-[150px] object-contain max-[480px]:w-[132px]"
+          className="h-auto w-[166px] object-contain max-[480px]:w-[146px]"
         />
       </Link>
       {isAuthenticated === false && (
         <Link
           href="/auth/signin"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#ead8c6] bg-white text-[#171553] transition hover:bg-[#fff8f0]"
+          className="absolute right-5 top-1/2 flex h-8 -translate-y-1/2 items-center justify-center rounded-full border border-[#ead8c6] bg-white px-3 text-[13px] font-semibold text-[#171553] transition hover:bg-[#fff8f0] max-[480px]:right-4"
           aria-label="로그인"
           title="로그인"
         >
-          <LogIn className="h-[18px] w-[18px]" strokeWidth={2} />
+          로그인
         </Link>
       )}
     </header>

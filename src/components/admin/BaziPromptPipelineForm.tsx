@@ -25,6 +25,25 @@ type SaveStatus = {
   message: string;
 } | null;
 
+const promptVariableGroups = [
+  {
+    label: '기본 명식',
+    variables: ['{{baziJson}}', '{{baziSummary}}', '{{gender}}'],
+  },
+  {
+    label: '기둥/운',
+    variables: ['{{yearPillar}}', '{{monthPillar}}', '{{dayPillar}}', '{{timePillar}}', '{{currentYear}}'],
+  },
+  {
+    label: '다중 인물',
+    variables: ['{{subjectsJson}}', '{{subjectsSummary}}', '{{person1Name}}', '{{person1BaziJson}}', '{{person1BaziSummary}}', '{{person2Name}}', '{{person2BaziJson}}', '{{person2BaziSummary}}'],
+  },
+  {
+    label: '파이프라인',
+    variables: ['{{previousStepResults}}', '{{stepResults}}'],
+  },
+];
+
 export default function BaziPromptPipelineForm({ settings, defaultConfig }: Props) {
   const router = useRouter();
   const [promptSettings, setPromptSettings] = useState(settings);
@@ -436,26 +455,40 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
             <p className="mt-2 max-w-3xl text-[15px] leading-[1.65] text-[#66594d]">
               여러 분석 프롬프트를 실행한 뒤 최종 편집 프롬프트에서 하나의 상담문으로 통합합니다.
             </p>
-            <p className="mt-2 max-w-5xl text-[15px] leading-[1.6] text-[#8a7a68]">
-              사용 가능 변수: {'{{baziJson}}'}, {'{{baziSummary}}'}, {'{{subjectsJson}}'}, {'{{subjectsSummary}}'}, {'{{person1Name}}'}, {'{{person1BaziSummary}}'}, {'{{person2Name}}'}, {'{{person2BaziSummary}}'}, {'{{gender}}'}, {'{{yearPillar}}'}, {'{{monthPillar}}'}, {'{{dayPillar}}'}, {'{{timePillar}}'}, {'{{currentYear}}'}, {'{{previousStepResults}}'}, {'{{stepResults}}'}
-            </p>
+            <div className="mt-4 max-w-5xl rounded-[10px] border border-[#eadfd4] bg-[#fffaf4] px-4 py-4">
+              <p className="text-[13px] font-semibold text-[#66594d]">사용 가능 변수</p>
+              <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                {promptVariableGroups.map((group) => (
+                  <div key={group.label}>
+                    <p className="text-[12px] font-semibold text-[#b06b16]">{group.label}</p>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {group.variables.map((variable) => (
+                        <code key={variable} className="rounded-[6px] border border-[#ead8c6] bg-white px-2 py-1 text-[12px] font-semibold text-[#2a2018]">
+                          {variable}
+                        </code>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="grid w-full grid-cols-3 gap-2 xl:w-[120px] xl:grid-cols-1">
             <button
               type="button"
               onClick={() => saveConfig('reset')}
               disabled={isSaving || !selectedSetting}
-              className="flex h-11 cursor-pointer items-center gap-2 rounded-[9px] border border-[#ead8c6] bg-white px-4 text-[15px] font-semibold text-[#66594d] transition hover:bg-[#fff8f0] disabled:cursor-wait disabled:opacity-60"
+              className="flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-[9px] border border-[#ead8c6] bg-white px-3 text-[14px] font-semibold text-[#66594d] transition hover:bg-[#fff8f0] disabled:cursor-wait disabled:opacity-60"
             >
               <RotateCcw className="h-4 w-4" strokeWidth={2} />
-              기본값 복원
+              기본값
             </button>
             <button
               type="button"
               onClick={() => saveConfig('save')}
               disabled={isSaving || !selectedSetting}
-              className="flex h-11 cursor-pointer items-center gap-2 rounded-[9px] bg-[#191450] px-4 text-[15px] font-semibold text-white transition hover:bg-[#24206a] disabled:cursor-wait disabled:bg-[#cfc8bd]"
+              className="flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-[9px] bg-[#191450] px-3 text-[14px] font-semibold text-white transition hover:bg-[#24206a] disabled:cursor-wait disabled:bg-[#cfc8bd]"
             >
               <Save className="h-4 w-4" strokeWidth={2} />
               {isSaving ? '저장 중' : '저장'}
@@ -464,7 +497,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
               type="button"
               onClick={deleteSetting}
               disabled={isSaving || !selectedSetting}
-              className="flex h-11 cursor-pointer items-center gap-2 rounded-[9px] border border-[#f0c7ba] bg-[#fff2ec] px-4 text-[15px] font-semibold text-[#a05738] transition hover:bg-[#ffe8de] disabled:cursor-wait disabled:opacity-60"
+              className="flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-[9px] border border-[#f0c7ba] bg-[#fff2ec] px-3 text-[14px] font-semibold text-[#a05738] transition hover:bg-[#ffe8de] disabled:cursor-wait disabled:opacity-60"
             >
               <Trash2 className="h-4 w-4" strokeWidth={2} />
               삭제

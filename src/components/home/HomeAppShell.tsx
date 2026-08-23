@@ -11,7 +11,7 @@ type Props = {
   children: ReactNode;
 };
 
-const shellRoutes = new Set(['/', '/consultations', '/people', '/archive', '/my', '/terms', '/privacy', '/refund-policy']);
+const shellRoutes = new Set(['/', '/consultations', '/people', '/archive', '/my', '/terms', '/privacy', '/refund-policy', '/auth/signin', '/auth/signup']);
 
 export default function HomeAppShell({ children }: Props) {
   const pathname = usePathname();

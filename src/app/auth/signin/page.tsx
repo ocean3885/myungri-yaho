@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import Link from 'next/link';
-import Image from 'next/image';
 
 export default function SignInPage() {
     const [email, setEmail] = useState('');
@@ -40,20 +39,8 @@ export default function SignInPage() {
     };
 
     return (
-        <div className="flex min-h-screen w-full justify-center bg-[#FEFAF5] text-[#121225]">
-            <main className="flex min-h-screen w-full max-w-[480px] flex-col bg-[#FEFAF5] px-6 py-8 shadow-[0_0_45px_rgba(47,34,17,0.12)]">
-                <div className="flex h-16 items-center justify-center">
-                    <Image
-                        src="/images/my-logo.png"
-                        alt="명리야호"
-                        width={180}
-                        height={48}
-                        priority
-                        className="object-contain"
-                    />
-                </div>
-
-                <section className="mt-10 rounded-[12px] border border-[#ead8c6] bg-white px-5 py-6 shadow-[0_12px_32px_rgba(92,61,25,0.06)]">
+        <>
+                <section className="rounded-[12px] border border-[#ead8c6] bg-white px-5 py-6 shadow-[0_12px_32px_rgba(92,61,25,0.06)]">
                     <div className="mb-7">
                         <h1 className="text-[24px] font-semibold text-[#171553]">로그인</h1>
                         <p className="mt-2 break-keep text-[14px] leading-[1.65] text-[#66594d]">
@@ -113,7 +100,6 @@ export default function SignInPage() {
                         </Link>
                     </div>
                 </section>
-            </main>
-        </div>
+        </>
     );
 }

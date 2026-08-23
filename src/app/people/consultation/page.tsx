@@ -23,7 +23,7 @@ export default async function ConsultationConfirmationPage({ searchParams }: Pro
     adminSupabase.from('people').select('id, name, relation, gender, calendar, birth_date, birth_time, birth_params, bazi_result').eq('user_id', userId).order('created_at', { ascending: false }).limit(30),
   ]);
 
-  if (!consultationType.enabled) redirect('/people');
+  if (!consultationType.enabled) redirect('/consultations');
 
   const isAdmin = userResult.data?.role === 'admin';
 

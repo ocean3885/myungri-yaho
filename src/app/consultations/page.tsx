@@ -15,7 +15,7 @@ export default async function ConsultationsPage() {
     <div className="rounded-[16px] border border-[#ead8c6] bg-[#fff8f0] px-5 py-6">
       <p className="text-[12px] font-semibold tracking-[0.12em] text-[#b06b16]">CONSULTATION</p>
       <h1 className="mt-2 text-[25px] font-bold tracking-[-0.03em] text-[#171553]">어떤 상담이 궁금하세요?</h1>
-      <p className="mt-3 break-keep text-[13px] leading-6 text-[#66594d]">상담 종류를 먼저 선택한 뒤 필요한 인물의 명식을 입력하거나 저장된 인물을 불러올 수 있어요.</p>
+      <p className="mt-3 break-keep text-[13px] leading-6 text-[#66594d]">상담 종류를 선택한 뒤 저장된 인물을 골라 상담을 진행할 수 있어요.</p>
     </div>
 
     <div className="mt-5 space-y-3">
@@ -33,7 +33,7 @@ export default async function ConsultationsPage() {
             <p className="mt-3 text-[17px] font-bold text-[#b06b16]">{type.priceKrw === 0 ? '무료' : `${type.priceKrw.toLocaleString('ko-KR')}원`}</p>
           </div>
         </div>
-        <Link href={session?.user ? `/people?consultation=${encodeURIComponent(type.key)}` : `/auth/signin?callbackUrl=${encodeURIComponent(`/people?consultation=${type.key}`)}`} className="font-display mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-[9px] bg-[#191450] text-[14px] font-medium text-white transition hover:bg-[#24206a]">
+        <Link href={session?.user ? `/people/consultation?type=${encodeURIComponent(type.key)}` : `/auth/signin?callbackUrl=${encodeURIComponent(`/people/consultation?type=${type.key}`)}`} className="font-display mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-[9px] bg-[#191450] text-[14px] font-medium text-white transition hover:bg-[#24206a]">
           이 상담 시작하기 <ArrowRight className="h-4 w-4" />
         </Link>
       </article>)}
