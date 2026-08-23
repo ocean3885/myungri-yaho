@@ -22,6 +22,7 @@ type UpdateBody = {
   sortOrder?: unknown;
   priceKrw?: unknown;
   subjectCount?: unknown;
+  imageUrl?: unknown;
   config?: unknown;
 };
 
@@ -67,6 +68,7 @@ export async function POST(request: NextRequest) {
   if (priceKrw === null) return invalidPriceResponse();
   const subjectCount = normalizeSubjectCount(body.subjectCount);
   if (subjectCount === null) return invalidSubjectCountResponse();
+  const imageUrl = normalizeImageUrl(body.imageUrl);
 
   try {
     const adminSupabase = await createAdminClient();
@@ -106,6 +108,7 @@ export async function POST(request: NextRequest) {
         sort_order: sortOrder,
         price_krw: priceKrw,
         subject_count: subjectCount,
+        image_url: imageUrl,
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'key',
@@ -125,6 +128,7 @@ export async function POST(request: NextRequest) {
       sortOrder,
       priceKrw,
       subjectCount,
+      imageUrl,
       config: value,
     });
   } catch (error) {
@@ -194,6 +198,7 @@ export async function PATCH(request: NextRequest) {
     if (priceKrw === null) return invalidPriceResponse();
     const subjectCount = normalizeSubjectCount(body.subjectCount);
     if (subjectCount === null) return invalidSubjectCountResponse();
+    const imageUrl = normalizeImageUrl(body.imageUrl);
 
     try {
       const adminSupabase = await createAdminClient();
@@ -240,6 +245,7 @@ export async function PATCH(request: NextRequest) {
           sort_order: sortOrder,
           price_krw: priceKrw,
           subject_count: subjectCount,
+          image_url: imageUrl,
           updated_at: new Date().toISOString(),
         }, {
           onConflict: 'key',
@@ -268,6 +274,7 @@ export async function PATCH(request: NextRequest) {
         sortOrder,
         priceKrw,
         subjectCount,
+        imageUrl,
         config: value,
       });
     } catch (error) {
@@ -307,6 +314,7 @@ export async function PATCH(request: NextRequest) {
     if (priceKrw === null) return invalidPriceResponse();
     const subjectCount = normalizeSubjectCount(body.subjectCount);
     if (subjectCount === null) return invalidSubjectCountResponse();
+    const imageUrl = normalizeImageUrl(body.imageUrl);
     const { error: consultationTypeError } = await adminSupabase
       .from('consultation_types')
       .upsert({
@@ -318,6 +326,7 @@ export async function PATCH(request: NextRequest) {
         sort_order: sortOrder,
         price_krw: priceKrw,
         subject_count: subjectCount,
+        image_url: imageUrl,
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'key',
@@ -337,6 +346,7 @@ export async function PATCH(request: NextRequest) {
       sortOrder,
       priceKrw,
       subjectCount,
+      imageUrl,
       config: value,
     });
   } catch (error) {
@@ -439,4 +449,13 @@ function normalizeSubjectCount(value: unknown) {
 
 function invalidSubjectCountResponse() {
   return NextResponse.json({ message: '필요 인원은 1명 이상 4명 이하로 입력해주세요.' }, { status: 400 });
+}
+
+function normalizeImageUrl(value: unknown) {
+  if (typeof value !== 'string') return null;
+  const text = value.trim().slice(0, 500);
+  if (!text) return null;
+  if (text.startsWith('public/')) return `/${text.slice('public/'.length)}`;
+  if (text.startsWith('/public/')) return `/${text.slice('/public/'.length)}`;
+  return text.startsWith('/') ? text : `/${text}`;
 }

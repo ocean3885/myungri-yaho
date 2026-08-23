@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight, Sparkles, Users } from 'lucide-react';
 import { listConsultationTypes } from '@/lib/consultation-types';
@@ -19,23 +20,30 @@ export default async function ConsultationsPage() {
     </div>
 
     <div className="mt-5 space-y-3">
-      {consultationTypes.map((type) => <article key={type.key} className="rounded-[14px] border border-[#ead8c6] bg-white px-5 py-5 shadow-[0_10px_28px_rgba(92,61,25,0.055)]">
-        <div className="flex items-start gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#f4ecff] text-[#6d4bc3]">
-            {type.subjectCount > 1 ? <Users className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-[18px] font-semibold text-[#171553]">{type.name}</h2>
-              <span className="rounded-full bg-[#f6efe8] px-2 py-0.5 text-[11px] font-semibold text-[#7d5a36]">{type.subjectCount}명</span>
-            </div>
-            {type.description && <p className="mt-2 break-keep text-[13px] leading-6 text-[#66594d]">{type.description}</p>}
-            <p className="mt-3 text-[17px] font-bold text-[#b06b16]">{type.priceKrw === 0 ? '무료' : `${type.priceKrw.toLocaleString('ko-KR')}원`}</p>
+      {consultationTypes.map((type) => <article key={type.key} className="overflow-hidden rounded-[14px] border border-[#ead8c6] bg-white shadow-[0_10px_28px_rgba(92,61,25,0.055)]">
+        {type.imageUrl && (
+          <div className="relative h-36 w-full bg-[#f6efe8]">
+            <Image src={type.imageUrl} alt="" fill sizes="(min-width: 768px) 680px, 100vw" className="object-cover" />
           </div>
+        )}
+        <div className="px-5 py-5">
+          <div className="flex items-start gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#f4ecff] text-[#6d4bc3]">
+              {type.subjectCount > 1 ? <Users className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-[18px] font-semibold text-[#171553]">{type.name}</h2>
+                <span className="rounded-full bg-[#f6efe8] px-2 py-0.5 text-[11px] font-semibold text-[#7d5a36]">{type.subjectCount}명</span>
+              </div>
+              {type.description && <p className="mt-2 break-keep text-[13px] leading-6 text-[#66594d]">{type.description}</p>}
+              <p className="mt-3 text-[17px] font-bold text-[#b06b16]">{type.priceKrw === 0 ? '무료' : `${type.priceKrw.toLocaleString('ko-KR')}원`}</p>
+            </div>
+          </div>
+          <Link href={session?.user ? `/people/consultation?type=${encodeURIComponent(type.key)}` : `/auth/signin?callbackUrl=${encodeURIComponent(`/people/consultation?type=${type.key}`)}`} className="font-display mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-[9px] bg-[#191450] text-[14px] font-medium text-white transition hover:bg-[#24206a]">
+            이 상담 시작하기 <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
-        <Link href={session?.user ? `/people/consultation?type=${encodeURIComponent(type.key)}` : `/auth/signin?callbackUrl=${encodeURIComponent(`/people/consultation?type=${type.key}`)}`} className="font-display mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-[9px] bg-[#191450] text-[14px] font-medium text-white transition hover:bg-[#24206a]">
-          이 상담 시작하기 <ArrowRight className="h-4 w-4" />
-        </Link>
       </article>)}
     </div>
 

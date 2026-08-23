@@ -56,6 +56,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
   const [newConsultationSortOrder, setNewConsultationSortOrder] = useState(100);
   const [newConsultationPriceKrw, setNewConsultationPriceKrw] = useState(990);
   const [newConsultationSubjectCount, setNewConsultationSubjectCount] = useState(1);
+  const [newConsultationImageUrl, setNewConsultationImageUrl] = useState('/images/consultations/saju.webp');
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState<SaveStatus>(null);
 
@@ -102,6 +103,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
           sortOrder: newConsultationSortOrder,
           priceKrw: newConsultationPriceKrw,
           subjectCount: newConsultationSubjectCount,
+          imageUrl: newConsultationImageUrl,
           config: nextConfig,
         }),
       });
@@ -120,6 +122,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
         sortOrder: data.sortOrder,
         priceKrw: data.priceKrw,
         subjectCount: data.subjectCount,
+        imageUrl: typeof data.imageUrl === 'string' ? data.imageUrl : null,
         config: data.config,
         updatedAt: null,
       };
@@ -134,6 +137,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
       setNewConsultationSortOrder(100);
       setNewConsultationPriceKrw(990);
       setNewConsultationSubjectCount(1);
+      setNewConsultationImageUrl('/images/consultations/saju.webp');
       setStatus({ type: 'success', message: data.message || '상담종류 프롬프트를 추가했습니다.' });
       router.refresh();
     } catch (error) {
@@ -169,6 +173,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
           sortOrder: selectedSetting.sortOrder,
           priceKrw: selectedSetting.priceKrw,
           subjectCount: selectedSetting.subjectCount,
+          imageUrl: selectedSetting.imageUrl,
           config: nextConfig,
         }),
       });
@@ -186,6 +191,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
         sortOrder: typeof data.sortOrder === 'number' ? data.sortOrder : selectedSetting.sortOrder,
         priceKrw: typeof data.priceKrw === 'number' ? data.priceKrw : selectedSetting.priceKrw,
         subjectCount: typeof data.subjectCount === 'number' ? data.subjectCount : selectedSetting.subjectCount,
+        imageUrl: typeof data.imageUrl === 'string' ? data.imageUrl : null,
         updatedAt: new Date().toISOString(),
       });
       setStatus({ type: 'success', message: data.message || '프롬프트 설정을 저장했습니다.' });
@@ -220,6 +226,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
           sortOrder: selectedSetting.sortOrder,
           priceKrw: selectedSetting.priceKrw,
           subjectCount: selectedSetting.subjectCount,
+          imageUrl: selectedSetting.imageUrl,
           config: formConfig,
         }),
       });
@@ -238,6 +245,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
         sortOrder: typeof data.sortOrder === 'number' ? data.sortOrder : selectedSetting.sortOrder,
         priceKrw: typeof data.priceKrw === 'number' ? data.priceKrw : selectedSetting.priceKrw,
         subjectCount: typeof data.subjectCount === 'number' ? data.subjectCount : selectedSetting.subjectCount,
+        imageUrl: typeof data.imageUrl === 'string' ? data.imageUrl : null,
         config: data.config,
         updatedAt: new Date().toISOString(),
       };
@@ -387,6 +395,16 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
               placeholder="사용자에게 보여줄 상담 설명"
               className={textareaClassName}
             />
+          </label>
+          <label className="mt-3 block">
+            <span className="mb-2 block text-[15px] font-semibold text-[#66594d]">대표 이미지</span>
+            <input
+              value={newConsultationImageUrl}
+              onChange={(event) => setNewConsultationImageUrl(event.target.value)}
+              placeholder="public/images/consultations/saju.webp"
+              className={inputClassName}
+            />
+            <span className="mt-1 block text-[12px] text-[#8a7a68]">public 경로 또는 /images/... 형식</span>
           </label>
           <label className="mt-3 block">
             <span className="mb-2 block text-[15px] font-semibold text-[#66594d]">가격 (원)</span>
@@ -571,6 +589,14 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
                   <option value={1}>1명</option><option value={2}>2명</option><option value={3}>3명</option><option value={4}>4명</option>
                 </select>
               </label>
+            </div>
+            <div className="mt-4">
+              <TextInput
+                label="대표 이미지"
+                value={selectedSetting.imageUrl || ''}
+                onChange={(value) => updateSelectedSetting({ imageUrl: value })}
+              />
+              <p className="mt-1 text-[12px] text-[#8a7a68]">예: public/images/consultations/saju.webp</p>
             </div>
             <div className="mt-4">
               <Textarea

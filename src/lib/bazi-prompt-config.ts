@@ -94,6 +94,7 @@ type ConsultationTypesListResult = {
         sort_order?: number | null;
         price_krw?: number | null;
         subject_count?: number | null;
+        image_url?: string | null;
         updated_at?: string | null;
     }> | null;
     error: { message?: string } | null;
@@ -108,6 +109,7 @@ export type BaziPromptSetting = {
     sortOrder: number;
     priceKrw: number;
     subjectCount: number;
+    imageUrl: string | null;
     config: BaziPromptPipelineConfig;
     updatedAt: string | null;
 };
@@ -289,7 +291,7 @@ export async function listBaziPromptSettings(adminSupabase: unknown): Promise<Ba
             .order('key', { ascending: true }),
         consultationTypesClient
             .from('consultation_types')
-            .select('key, name, description, prompt_setting_key, enabled, sort_order, price_krw, subject_count, updated_at')
+            .select('key, name, description, prompt_setting_key, enabled, sort_order, price_krw, subject_count, image_url, updated_at')
             .order('sort_order', { ascending: true })
             .order('key', { ascending: true }),
     ]);
@@ -321,6 +323,7 @@ export async function listBaziPromptSettings(adminSupabase: unknown): Promise<Ba
                 sortOrder: consultationTypeMeta?.sort_order ?? 100,
                 priceKrw: consultationTypeMeta?.price_krw ?? 990,
                 subjectCount: Math.min(4, Math.max(1, consultationTypeMeta?.subject_count ?? 1)),
+                imageUrl: consultationTypeMeta?.image_url?.trim() || null,
                 config: normalizeBaziPromptPipelineConfig(item.value),
                 updatedAt: consultationTypeMeta?.updated_at || item.updated_at || null,
             };
@@ -348,6 +351,7 @@ export function getDefaultBaziPromptSetting(): BaziPromptSetting {
         sortOrder: 10,
         priceKrw: 990,
         subjectCount: 1,
+        imageUrl: '/images/consultations/saju.webp',
         config: defaultBaziPromptPipelineConfig,
         updatedAt: null,
     };
