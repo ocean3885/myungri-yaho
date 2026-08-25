@@ -4,6 +4,7 @@ import {
     getBaziPromptSettingKey,
     normalizeBaziConsultationType,
 } from '@/lib/bazi-prompt-config';
+import { normalizeConsultationIconKey, type ConsultationIconKey } from '@/lib/consultation-icons';
 
 export type ConsultationType = {
     id?: string;
@@ -16,6 +17,7 @@ export type ConsultationType = {
     priceKrw: number;
     subjectCount: number;
     imageUrl: string | null;
+    iconKey: ConsultationIconKey;
     createdAt?: string | null;
     updatedAt?: string | null;
 };
@@ -47,6 +49,7 @@ type ConsultationTypeRow = {
     price_krw?: number | null;
     subject_count?: number | null;
     image_url?: string | null;
+    icon_key?: string | null;
     created_at?: string | null;
     updated_at?: string | null;
 };
@@ -72,6 +75,7 @@ export function getDefaultConsultationType(): ConsultationType {
         priceKrw: 990,
         subjectCount: 1,
         imageUrl: '/images/consultations/saju.webp',
+        iconKey: 'sparkles',
     };
 }
 
@@ -80,7 +84,7 @@ export async function getConsultationTypeByKey(adminSupabase: unknown, key?: str
     const client = adminSupabase as ConsultationTypesQueryClient;
     const { data, error } = await client
         .from('consultation_types')
-        .select('id, key, name, description, prompt_setting_key, enabled, sort_order, price_krw, subject_count, image_url, created_at, updated_at')
+        .select('id, key, name, description, prompt_setting_key, enabled, sort_order, price_krw, subject_count, image_url, icon_key, created_at, updated_at')
         .eq('key', normalizedKey)
         .maybeSingle();
 
@@ -108,7 +112,7 @@ export async function listConsultationTypes(adminSupabase: unknown, onlyEnabled 
     const client = adminSupabase as ConsultationTypesQueryClient;
     const query = client
         .from('consultation_types')
-        .select('id, key, name, description, prompt_setting_key, enabled, sort_order, price_krw, subject_count, image_url, created_at, updated_at');
+        .select('id, key, name, description, prompt_setting_key, enabled, sort_order, price_krw, subject_count, image_url, icon_key, created_at, updated_at');
     const result = onlyEnabled
         ? await query.eq('enabled', true).order('sort_order', { ascending: true }).order('key', { ascending: true })
         : await query.order('sort_order', { ascending: true }).order('key', { ascending: true });
@@ -136,6 +140,7 @@ function mapConsultationTypeRow(row: ConsultationTypeRow): ConsultationType {
         priceKrw: row.price_krw ?? 990,
         subjectCount: Math.min(4, Math.max(1, row.subject_count ?? 1)),
         imageUrl: row.image_url?.trim() || null,
+        iconKey: normalizeConsultationIconKey(row.icon_key),
         createdAt: row.created_at || null,
         updatedAt: row.updated_at || null,
     };

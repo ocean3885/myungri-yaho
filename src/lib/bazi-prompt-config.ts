@@ -1,4 +1,5 @@
 import type { BaziResult } from '@/components/bazi/types';
+import { normalizeConsultationIconKey, type ConsultationIconKey } from '@/lib/consultation-icons';
 import { DEEPSEEK_MODEL } from '@/lib/deepseek';
 
 export const BAZI_PROMPT_SETTING_PREFIX = 'prompt.bazi';
@@ -95,6 +96,7 @@ type ConsultationTypesListResult = {
         price_krw?: number | null;
         subject_count?: number | null;
         image_url?: string | null;
+        icon_key?: string | null;
         updated_at?: string | null;
     }> | null;
     error: { message?: string } | null;
@@ -110,6 +112,7 @@ export type BaziPromptSetting = {
     priceKrw: number;
     subjectCount: number;
     imageUrl: string | null;
+    iconKey: ConsultationIconKey;
     config: BaziPromptPipelineConfig;
     updatedAt: string | null;
 };
@@ -291,7 +294,7 @@ export async function listBaziPromptSettings(adminSupabase: unknown): Promise<Ba
             .order('key', { ascending: true }),
         consultationTypesClient
             .from('consultation_types')
-            .select('key, name, description, prompt_setting_key, enabled, sort_order, price_krw, subject_count, image_url, updated_at')
+            .select('key, name, description, prompt_setting_key, enabled, sort_order, price_krw, subject_count, image_url, icon_key, updated_at')
             .order('sort_order', { ascending: true })
             .order('key', { ascending: true }),
     ]);
@@ -324,6 +327,7 @@ export async function listBaziPromptSettings(adminSupabase: unknown): Promise<Ba
                 priceKrw: consultationTypeMeta?.price_krw ?? 990,
                 subjectCount: Math.min(4, Math.max(1, consultationTypeMeta?.subject_count ?? 1)),
                 imageUrl: consultationTypeMeta?.image_url?.trim() || null,
+                iconKey: normalizeConsultationIconKey(consultationTypeMeta?.icon_key),
                 config: normalizeBaziPromptPipelineConfig(item.value),
                 updatedAt: consultationTypeMeta?.updated_at || item.updated_at || null,
             };
@@ -352,6 +356,7 @@ export function getDefaultBaziPromptSetting(): BaziPromptSetting {
         priceKrw: 990,
         subjectCount: 1,
         imageUrl: '/images/consultations/saju.webp',
+        iconKey: 'sparkles',
         config: defaultBaziPromptPipelineConfig,
         updatedAt: null,
     };

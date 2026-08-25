@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Compass } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, Compass, MessagesSquare, UserPlus } from 'lucide-react';
 
 import type { BaziResult, PillarKey } from '@/components/bazi/types';
 import BaziPillarsTable from '@/components/bazi/BaziPillarsTable';
@@ -309,6 +309,7 @@ export default function PeopleClient({ isAuthenticated, initialPeople, editPerso
   const [errorMessage, setErrorMessage] = useState('');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveMessage, setSaveMessage] = useState('');
+  const [lastSaveMode, setLastSaveMode] = useState<'create' | 'update' | null>(null);
 
   const isValidBirthDate = useMemo(() => parseBirthDate(form.birthDate) !== null, [form.birthDate]);
   const canPreview = useMemo(() => form.name.trim().length > 0 && isValidBirthDate, [form.name, isValidBirthDate]);
@@ -319,6 +320,7 @@ export default function PeopleClient({ isAuthenticated, initialPeople, editPerso
     setPreview(null);
     setSaveStatus('idle');
     setSaveMessage('');
+    setLastSaveMode(null);
   };
 
   const updateBirthDate = (value: string) => {
@@ -339,10 +341,25 @@ export default function PeopleClient({ isAuthenticated, initialPeople, editPerso
     setPreview(null);
     setSaveStatus('idle');
     setSaveMessage('');
+    setLastSaveMode(null);
     setErrorMessage('');
     if (editPerson) {
       router.replace('/people');
     }
+  };
+
+  const startAnotherRegistration = () => {
+    setForm(initialForm);
+    setEditingPersonId('');
+    setPreview(null);
+    setSaveStatus('idle');
+    setSaveMessage('');
+    setLastSaveMode(null);
+    setErrorMessage('');
+    router.replace('/people');
+    window.requestAnimationFrame(() => {
+      document.getElementById('person-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -408,6 +425,7 @@ export default function PeopleClient({ isAuthenticated, initialPeople, editPerso
       }
 
       setSaveStatus('saved');
+      setLastSaveMode(isEditing ? 'update' : 'create');
       setSaveMessage(data.message || (isEditing ? '인물 정보를 수정했습니다.' : '인물 정보를 저장했습니다.'));
       if (isSavedPerson(data.person)) {
         setPeople((current) => [data.person, ...current.filter((person) => person.id !== data.person.id)]);
@@ -636,30 +654,61 @@ export default function PeopleClient({ isAuthenticated, initialPeople, editPerso
                 })()}
 
                 <section className="rounded-[10px] border border-[#eadfd4] bg-[#FEFAF5] px-4 py-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={cancelPreview}
-                      className="font-display flex h-11 items-center justify-center rounded-[9px] border border-[#191450] bg-white px-4 text-[14px] font-medium text-[#191450] transition-colors hover:bg-[#fffaf4]"
-                    >
-                      취소하기
-                    </button>
-                    {isAuthenticated ? (
+                  {saveStatus === 'saved' ? (
+                    <div>
+                      <div className="flex items-start gap-3">
+                        <CheckCircle2 className="mt-0.5 h-6 w-6 shrink-0 text-[#357247]" strokeWidth={2} />
+                        <div>
+                          <h3 className="text-[16px] font-semibold text-[#214e2c]">
+                            {lastSaveMode === 'update' ? '수정이 완료되었어요' : '저장이 완료되었어요'}
+                          </h3>
+                          <p className="mt-1 break-keep text-[12px] leading-5 text-[#5f6f62]">
+                            저장한 인물로 상담을 시작하거나 다른 인물을 추가할 수 있어요.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-4 grid grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={startAnotherRegistration}
+                          className="font-display flex h-11 items-center justify-center gap-1.5 rounded-[9px] border border-[#191450] bg-white px-3 text-[13px] font-medium text-[#191450] transition-colors hover:bg-[#fffaf4]"
+                        >
+                          <UserPlus className="h-4 w-4" /> 다른 인물 등록
+                        </button>
+                        <Link
+                          href="/consultations"
+                          className="font-display flex h-11 items-center justify-center gap-1.5 rounded-[9px] bg-[#191450] px-3 text-[13px] font-medium text-white transition-colors hover:bg-[#24206a]"
+                        >
+                          <MessagesSquare className="h-4 w-4" /> 상담 선택하기
+                        </Link>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
                       <button
                         type="button"
-                        onClick={handleSavePerson}
-                        disabled={saveStatus === 'saving' || saveStatus === 'saved'}
-                        className="font-display flex h-11 cursor-pointer items-center justify-center rounded-[9px] bg-[#191450] px-4 text-[14px] font-medium text-white transition-colors hover:bg-[#24206a] disabled:cursor-not-allowed disabled:bg-[#cfc8bd]"
+                        onClick={cancelPreview}
+                        className="font-display flex h-11 items-center justify-center rounded-[9px] border border-[#191450] bg-white px-4 text-[14px] font-medium text-[#191450] transition-colors hover:bg-[#fffaf4]"
                       >
-                        {saveStatus === 'saving' ? '저장 중' : saveStatus === 'saved' ? (editingPersonId ? '수정 완료' : '저장 완료') : (editingPersonId ? '수정 저장하기' : '저장하기')}
+                        취소하기
                       </button>
-                    ) : (
-                      <Link href="/auth/signin" className="font-display flex h-11 items-center justify-center rounded-[9px] bg-[#191450] px-4 text-[14px] font-medium text-white">
-                        저장하기
-                      </Link>
-                    )}
-                  </div>
-                  {saveMessage && (
+                      {isAuthenticated ? (
+                        <button
+                          type="button"
+                          onClick={handleSavePerson}
+                          disabled={saveStatus === 'saving'}
+                          className="font-display flex h-11 cursor-pointer items-center justify-center rounded-[9px] bg-[#191450] px-4 text-[14px] font-medium text-white transition-colors hover:bg-[#24206a] disabled:cursor-not-allowed disabled:bg-[#cfc8bd]"
+                        >
+                          {saveStatus === 'saving' ? '저장 중' : editingPersonId ? '수정 저장하기' : '저장하기'}
+                        </button>
+                      ) : (
+                        <Link href="/auth/signin" className="font-display flex h-11 items-center justify-center rounded-[9px] bg-[#191450] px-4 text-[14px] font-medium text-white">
+                          저장하기
+                        </Link>
+                      )}
+                    </div>
+                  )}
+                  {saveMessage && saveStatus !== 'saved' && (
                     <p className={`mt-3 rounded-[8px] px-3 py-2 text-[12px] leading-[1.55] ${saveStatus === 'error'
                       ? 'bg-[#fff2ec] text-[#a05738]'
                       : 'bg-[#eef8ef] text-[#357247]'

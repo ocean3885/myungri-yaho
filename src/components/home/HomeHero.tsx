@@ -3,35 +3,32 @@
 import React from 'react';
 import Image from 'next/image';
 
-import HomeHeroActionButton from './HomeHeroActionButton';
-
 export default function HomeHero() {
   return (
-    <section className="relative mt-5 min-h-[324px] overflow-hidden rounded-[12px] border border-[#f1dfcc] bg-[#FFF8F0] px-5 py-7 shadow-[0_10px_25px_rgba(92,61,25,0.07)]">
-      <div className="pointer-events-none absolute right-0 top-14 h-12 w-24 rounded-l-full border-y border-l border-white/70" />
-      <div className="pointer-events-none absolute bottom-0 right-0 h-16 w-[158px] rounded-tl-full bg-[#f3e5d9]" />
-      <div className="pointer-events-none absolute right-28 top-[108px] text-[32px] font-black leading-none text-[#e7ad2d]">
+    <section className="relative min-h-[244px] overflow-hidden rounded-[12px] border border-[#f1dfcc] bg-[#FFF8F0] px-5 py-6 shadow-[0_10px_25px_rgba(92,61,25,0.07)]">
+      <div className="pointer-events-none absolute right-0 top-10 h-12 w-24 rounded-l-full border-y border-l border-white/70" />
+      <div className="pointer-events-none absolute bottom-0 right-0 h-14 w-[144px] rounded-tl-full bg-[#f3e5d9]" />
+      <div className="pointer-events-none absolute right-24 top-[82px] text-[28px] font-black leading-none text-[#e7ad2d]">
         *
       </div>
 
-      <div className="relative z-10">
-        <h2 className="font-display text-[25px] font-medium leading-[1.42] tracking-normal text-[#171553] max-[360px]:text-[22px]">
-          사주로 나와 소중한 사람을 더 깊이 이해해보세요
+      <div className="relative z-10 max-w-[68%]">
+        <p className="text-[12px] font-semibold text-[#a66c1a]">답이 필요한 순간</p>
+        <h2 className="font-display mt-2 text-[24px] font-medium leading-[1.42] tracking-normal text-[#171553] max-[360px]:text-[21px]">
+          고민은 가볍게,<br />당신의 답은 선명하게
         </h2>
-        <p className="mt-5 max-w-[58%] text-[14px] font-normal leading-[1.68] text-[#171717] max-[360px]:max-w-[60%] max-[360px]:text-[13px]">
-          저장된 인물의 생년월일시를 바탕으로 성향, 흐름, 고민 상담을 확인할 수 있어요.
+        <p className="mt-3 break-keep text-[13px] font-normal leading-[1.65] text-[#51483f] max-[360px]:text-[12px]">
+          사주에 담긴 흐름을 읽고, 지금 필요한 상담을 시작해보세요.
         </p>
-
-        <HomeHeroActionButton href="/consultations" />
       </div>
 
-      <div className="absolute -right-4 bottom-0 h-[194px] w-[194px] max-[360px]:-right-8 max-[360px]:h-[168px] max-[360px]:w-[168px]">
+      <div className="absolute -right-3 bottom-0 h-[172px] w-[172px] max-[360px]:-right-7 max-[360px]:h-[150px] max-[360px]:w-[150px]">
         <Image
           src="/images/myungho/myho-hello.webp"
           alt="명리야호 캐릭터"
           fill
           priority
-          sizes="220px"
+          sizes="180px"
           className="object-contain drop-shadow-[0_18px_20px_rgba(73,45,20,0.22)]"
         />
       </div>

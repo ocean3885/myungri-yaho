@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, RotateCcw, Save, Trash2 } from 'lucide-react';
+import { BriefcaseBusiness, CalendarDays, Compass, HeartHandshake, Landmark, Leaf, Plus, RotateCcw, Save, Sparkles, Trash2, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 
@@ -14,6 +14,7 @@ import {
   type BaziPromptSetting,
 } from '@/lib/bazi-prompt-config';
 import { DEEPSEEK_MODELS } from '@/lib/deepseek';
+import { CONSULTATION_ICON_OPTIONS, type ConsultationIconKey } from '@/lib/consultation-icons';
 
 type Props = {
   settings: BaziPromptSetting[];
@@ -57,6 +58,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
   const [newConsultationPriceKrw, setNewConsultationPriceKrw] = useState(990);
   const [newConsultationSubjectCount, setNewConsultationSubjectCount] = useState(1);
   const [newConsultationImageUrl, setNewConsultationImageUrl] = useState('/images/consultations/saju.webp');
+  const [newConsultationIconKey, setNewConsultationIconKey] = useState<ConsultationIconKey>('sparkles');
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState<SaveStatus>(null);
 
@@ -104,6 +106,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
           priceKrw: newConsultationPriceKrw,
           subjectCount: newConsultationSubjectCount,
           imageUrl: newConsultationImageUrl,
+          iconKey: newConsultationIconKey,
           config: nextConfig,
         }),
       });
@@ -123,6 +126,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
         priceKrw: data.priceKrw,
         subjectCount: data.subjectCount,
         imageUrl: typeof data.imageUrl === 'string' ? data.imageUrl : null,
+        iconKey: data.iconKey || newConsultationIconKey,
         config: data.config,
         updatedAt: null,
       };
@@ -138,6 +142,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
       setNewConsultationPriceKrw(990);
       setNewConsultationSubjectCount(1);
       setNewConsultationImageUrl('/images/consultations/saju.webp');
+      setNewConsultationIconKey('sparkles');
       setStatus({ type: 'success', message: data.message || '상담종류 프롬프트를 추가했습니다.' });
       router.refresh();
     } catch (error) {
@@ -174,6 +179,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
           priceKrw: selectedSetting.priceKrw,
           subjectCount: selectedSetting.subjectCount,
           imageUrl: selectedSetting.imageUrl,
+          iconKey: selectedSetting.iconKey,
           config: nextConfig,
         }),
       });
@@ -192,6 +198,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
         priceKrw: typeof data.priceKrw === 'number' ? data.priceKrw : selectedSetting.priceKrw,
         subjectCount: typeof data.subjectCount === 'number' ? data.subjectCount : selectedSetting.subjectCount,
         imageUrl: typeof data.imageUrl === 'string' ? data.imageUrl : null,
+        iconKey: data.iconKey || selectedSetting.iconKey,
         updatedAt: new Date().toISOString(),
       });
       setStatus({ type: 'success', message: data.message || '프롬프트 설정을 저장했습니다.' });
@@ -227,6 +234,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
           priceKrw: selectedSetting.priceKrw,
           subjectCount: selectedSetting.subjectCount,
           imageUrl: selectedSetting.imageUrl,
+          iconKey: selectedSetting.iconKey,
           config: formConfig,
         }),
       });
@@ -246,6 +254,7 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
         priceKrw: typeof data.priceKrw === 'number' ? data.priceKrw : selectedSetting.priceKrw,
         subjectCount: typeof data.subjectCount === 'number' ? data.subjectCount : selectedSetting.subjectCount,
         imageUrl: typeof data.imageUrl === 'string' ? data.imageUrl : null,
+        iconKey: data.iconKey || selectedSetting.iconKey,
         config: data.config,
         updatedAt: new Date().toISOString(),
       };
@@ -406,6 +415,11 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
             />
             <span className="mt-1 block text-[12px] text-[#8a7a68]">public 경로 또는 /images/... 형식</span>
           </label>
+          <IconPicker
+            className="mt-3"
+            value={newConsultationIconKey}
+            onChange={setNewConsultationIconKey}
+          />
           <label className="mt-3 block">
             <span className="mb-2 block text-[15px] font-semibold text-[#66594d]">가격 (원)</span>
             <input
@@ -598,6 +612,11 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
               />
               <p className="mt-1 text-[12px] text-[#8a7a68]">예: public/images/consultations/saju.webp</p>
             </div>
+            <IconPicker
+              className="mt-4"
+              value={selectedSetting.iconKey}
+              onChange={(value) => updateSelectedSetting({ iconKey: value })}
+            />
             <div className="mt-4">
               <Textarea
                 label="설명"
@@ -803,6 +822,52 @@ const textareaClassName = 'w-full rounded-[9px] border border-[#ead8c6] bg-white
 
 function sortPromptSettings(a: BaziPromptSetting, b: BaziPromptSetting) {
   return a.sortOrder - b.sortOrder || a.key.localeCompare(b.key);
+}
+
+const consultationIconComponents = {
+  sparkles: Sparkles,
+  users: Users,
+  heart: HeartHandshake,
+  landmark: Landmark,
+  briefcase: BriefcaseBusiness,
+  leaf: Leaf,
+  compass: Compass,
+  calendar: CalendarDays,
+} satisfies Record<ConsultationIconKey, typeof Sparkles>;
+
+function IconPicker({
+  value,
+  onChange,
+  className = '',
+}: {
+  value: ConsultationIconKey;
+  onChange: (value: ConsultationIconKey) => void;
+  className?: string;
+}) {
+  return (
+    <fieldset className={className}>
+      <legend className="mb-2 text-[15px] font-semibold text-[#66594d]">메인 아이콘</legend>
+      <div className="grid grid-cols-4 gap-2">
+        {CONSULTATION_ICON_OPTIONS.map((option) => {
+          const Icon = consultationIconComponents[option.key];
+          const selected = value === option.key;
+          return (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => onChange(option.key)}
+              aria-pressed={selected}
+              title={`${option.label} 아이콘`}
+              className={`flex h-16 flex-col items-center justify-center gap-1 rounded-[8px] border text-[11px] font-semibold transition ${selected ? 'border-[#191450] bg-[#f4f1ff] text-[#191450]' : 'border-[#ead8c6] bg-white text-[#76695d] hover:bg-[#fff8f0]'}`}
+            >
+              <Icon className="h-5 w-5" strokeWidth={1.8} />
+              <span>{option.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
 }
 
 function TextInput({

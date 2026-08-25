@@ -2,13 +2,13 @@
 
 import React from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Archive, Home as HomeIcon, Sparkles, User, UserRound } from 'lucide-react';
+import { Archive, MessagesSquare, User, UserRound } from 'lucide-react';
 
 export default function HomeBottomNav() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const isConsultationFlow = pathname === '/consultations'
+  const isConsultationFlow = pathname === '/' || pathname === '/consultations'
     || pathname.startsWith('/people/consultation')
     || (pathname === '/people' && searchParams.has('consultation'));
   const activeTab = isConsultationFlow
@@ -19,7 +19,7 @@ export default function HomeBottomNav() {
         ? 'archive'
         : pathname === '/my'
           ? 'my'
-          : 'home';
+          : 'consultations';
 
   const itemClass = (tab: string) =>
     `relative flex min-h-12 cursor-pointer flex-col items-center justify-center transition ${
@@ -31,16 +31,16 @@ export default function HomeBottomNav() {
     activeTab === tab ? <span className="absolute -top-3 h-1.5 w-8 rounded-full bg-[#dda445] max-[480px]:-top-2" /> : null;
 
   return (
-    <nav className="fixed bottom-0 left-1/2 z-50 grid w-full max-w-[480px] -translate-x-1/2 grid-cols-5 rounded-t-[22px] border border-[#e9e4dd] bg-white px-3 pb-5 pt-3 shadow-[0_-10px_24px_rgba(76,55,30,0.1)] max-[480px]:rounded-t-[18px] max-[480px]:px-1 max-[480px]:pb-[max(0.5rem,env(safe-area-inset-bottom))] max-[480px]:pt-2">
+    <nav className="fixed bottom-0 left-1/2 z-50 grid w-full max-w-[480px] -translate-x-1/2 grid-cols-4 border-t border-[#e9e4dd] bg-white/95 px-3 pb-5 pt-3 shadow-[0_-8px_24px_rgba(76,55,30,0.08)] backdrop-blur max-[480px]:px-1 max-[480px]:pb-[max(0.5rem,env(safe-area-inset-bottom))] max-[480px]:pt-2" aria-label="주요 메뉴">
       <button
         onClick={() => {
-          router.push('/');
+          router.push('/consultations');
         }}
-        className={itemClass('home')}
+        className={itemClass('consultations')}
       >
-        {activeMarker('home')}
-        <HomeIcon className="h-8 w-8 max-[480px]:h-6 max-[480px]:w-6" strokeWidth={1.9} />
-        <span className={labelClass('home')}>홈</span>
+        {activeMarker('consultations')}
+        <MessagesSquare className="h-8 w-8 max-[480px]:h-6 max-[480px]:w-6" strokeWidth={1.9} />
+        <span className={labelClass('consultations')}>상담</span>
       </button>
 
       <button
@@ -52,19 +52,6 @@ export default function HomeBottomNav() {
         {activeMarker('people')}
         <UserRound className="h-8 w-8 max-[480px]:h-6 max-[480px]:w-6" strokeWidth={1.9} />
         <span className={labelClass('people')}>인물</span>
-      </button>
-
-      <button
-        onClick={() => {
-          router.push('/consultations');
-        }}
-        className="relative flex min-h-12 cursor-pointer flex-col items-center justify-end text-[#171553]"
-        aria-label="상담 선택"
-      >
-        <span className={`absolute -top-7 flex h-14 w-14 items-center justify-center rounded-full border-[5px] border-white shadow-[0_8px_20px_rgba(25,20,80,0.28)] transition-colors ${activeTab === 'consultations' ? 'bg-[#dda445] text-[#171553]' : 'bg-[#191450] text-white'}`}>
-          <Sparkles className="h-6 w-6" strokeWidth={2} />
-        </span>
-        <span className={labelClass('consultations')}>상담</span>
       </button>
 
       <button

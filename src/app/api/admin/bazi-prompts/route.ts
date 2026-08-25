@@ -11,6 +11,7 @@ import {
   normalizeBaziPromptPipelineConfig,
 } from '@/lib/bazi-prompt-config';
 import { createAdminClient } from '@/utils/supabase/server';
+import { normalizeConsultationIconKey } from '@/lib/consultation-icons';
 
 type UpdateBody = {
   intent?: string;
@@ -23,6 +24,7 @@ type UpdateBody = {
   priceKrw?: unknown;
   subjectCount?: unknown;
   imageUrl?: unknown;
+  iconKey?: unknown;
   config?: unknown;
 };
 
@@ -69,6 +71,7 @@ export async function POST(request: NextRequest) {
   const subjectCount = normalizeSubjectCount(body.subjectCount);
   if (subjectCount === null) return invalidSubjectCountResponse();
   const imageUrl = normalizeImageUrl(body.imageUrl);
+  const iconKey = normalizeConsultationIconKey(body.iconKey);
 
   try {
     const adminSupabase = await createAdminClient();
@@ -109,6 +112,7 @@ export async function POST(request: NextRequest) {
         price_krw: priceKrw,
         subject_count: subjectCount,
         image_url: imageUrl,
+        icon_key: iconKey,
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'key',
@@ -116,7 +120,7 @@ export async function POST(request: NextRequest) {
 
     if (consultationTypeError) throw consultationTypeError;
 
-    revalidatePath('/admin/bazi-prompts');
+    revalidateConsultationPaths();
 
     return NextResponse.json({
       message: '상담종류 프롬프트를 추가했습니다.',
@@ -129,6 +133,7 @@ export async function POST(request: NextRequest) {
       priceKrw,
       subjectCount,
       imageUrl,
+      iconKey,
       config: value,
     });
   } catch (error) {
@@ -199,6 +204,7 @@ export async function PATCH(request: NextRequest) {
     const subjectCount = normalizeSubjectCount(body.subjectCount);
     if (subjectCount === null) return invalidSubjectCountResponse();
     const imageUrl = normalizeImageUrl(body.imageUrl);
+    const iconKey = normalizeConsultationIconKey(body.iconKey);
 
     try {
       const adminSupabase = await createAdminClient();
@@ -246,6 +252,7 @@ export async function PATCH(request: NextRequest) {
           price_krw: priceKrw,
           subject_count: subjectCount,
           image_url: imageUrl,
+          icon_key: iconKey,
           updated_at: new Date().toISOString(),
         }, {
           onConflict: 'key',
@@ -262,7 +269,7 @@ export async function PATCH(request: NextRequest) {
         if (previousTypeDeleteError) throw previousTypeDeleteError;
       }
 
-      revalidatePath('/admin/bazi-prompts');
+      revalidateConsultationPaths();
 
       return NextResponse.json({
         message: '상담종류 key를 변경했습니다.',
@@ -275,6 +282,7 @@ export async function PATCH(request: NextRequest) {
         priceKrw,
         subjectCount,
         imageUrl,
+        iconKey,
         config: value,
       });
     } catch (error) {
@@ -315,6 +323,7 @@ export async function PATCH(request: NextRequest) {
     const subjectCount = normalizeSubjectCount(body.subjectCount);
     if (subjectCount === null) return invalidSubjectCountResponse();
     const imageUrl = normalizeImageUrl(body.imageUrl);
+    const iconKey = normalizeConsultationIconKey(body.iconKey);
     const { error: consultationTypeError } = await adminSupabase
       .from('consultation_types')
       .upsert({
@@ -327,6 +336,7 @@ export async function PATCH(request: NextRequest) {
         price_krw: priceKrw,
         subject_count: subjectCount,
         image_url: imageUrl,
+        icon_key: iconKey,
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'key',
@@ -334,7 +344,7 @@ export async function PATCH(request: NextRequest) {
 
     if (consultationTypeError) throw consultationTypeError;
 
-    revalidatePath('/admin/bazi-prompts');
+    revalidateConsultationPaths();
 
     return NextResponse.json({
       message: intent === 'reset' ? '기본 프롬프트 설정으로 복원했습니다.' : '프롬프트 설정을 저장했습니다.',
@@ -347,6 +357,7 @@ export async function PATCH(request: NextRequest) {
       priceKrw,
       subjectCount,
       imageUrl,
+      iconKey,
       config: value,
     });
   } catch (error) {
@@ -393,7 +404,7 @@ export async function DELETE(request: NextRequest) {
 
     if (consultationTypeError) throw consultationTypeError;
 
-    revalidatePath('/admin/bazi-prompts');
+    revalidateConsultationPaths();
 
     return NextResponse.json({
       message: '상담종류 프롬프트를 삭제했습니다.',
@@ -413,6 +424,12 @@ function normalizeConsultationTypeName(value: unknown, fallbackKey: string) {
   if (fallbackKey === DEFAULT_BAZI_CONSULTATION_TYPE) return '기본 상담';
 
   return fallbackKey;
+}
+
+function revalidateConsultationPaths() {
+  revalidatePath('/admin/bazi-prompts');
+  revalidatePath('/consultations');
+  revalidatePath('/');
 }
 
 function normalizeOptionalText(value: unknown) {

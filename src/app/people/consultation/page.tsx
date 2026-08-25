@@ -33,6 +33,7 @@ export default async function ConsultationConfirmationPage({ searchParams }: Pro
         key: consultationType.key,
         name: consultationType.name,
         description: consultationType.description,
+        imageUrl: consultationType.imageUrl,
         priceKrw: consultationType.priceKrw,
         subjectCount: consultationType.subjectCount,
       }}
