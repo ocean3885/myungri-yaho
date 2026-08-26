@@ -45,6 +45,8 @@ export type BaziPromptStepResult = {
 export type BaziGenerationMetadata = {
     promptVersion: string;
     model: string;
+    analysisModel?: string;
+    finalModel?: string;
     generatedAt: string;
     consultationTypeKey?: string;
     promptSettingKey?: string;

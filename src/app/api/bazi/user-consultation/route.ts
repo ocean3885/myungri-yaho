@@ -28,6 +28,13 @@ export async function POST(request: NextRequest) {
         );
     }
 
+    if (!process.env.OPENAI_API_KEY && !process.env.CHATGPT_API_KEY) {
+        return NextResponse.json(
+            { message: '최종 상담문 생성 API 키가 설정되어 있지 않습니다.' },
+            { status: 500 },
+        );
+    }
+
     let body: {
         subjects?: Array<{ personId?: string; result?: BaziResult; subjectName?: string; birthParams?: BaziResult['birth_params'] }>;
         consultationType?: string;

@@ -2,6 +2,7 @@
 
 import { Suspense, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
+import { SessionProvider } from 'next-auth/react';
 
 import HomeBottomNav from './HomeBottomNav';
 import HomeHeader from './HomeHeader';
@@ -22,15 +23,17 @@ export default function HomeAppShell({ children }: Props) {
   }
 
   return (
-    <div className="flex min-h-screen w-full justify-center bg-[#FEFAF5] text-[#121225]">
-      <div className="relative flex min-h-screen w-full max-w-[480px] flex-col bg-[#FEFAF5] shadow-[0_0_45px_rgba(47,34,17,0.12)]">
-        <HomeHeader />
-        <main className="relative z-10 flex-1 px-6 pb-6 pt-5 max-[480px]:px-5 max-[480px]:pb-5 max-[480px]:pt-3">{children}</main>
-        <SiteFooter />
-        <Suspense fallback={null}>
-          <HomeBottomNav />
-        </Suspense>
+    <SessionProvider>
+      <div className="flex min-h-screen w-full justify-center bg-[#FEFAF5] text-[#121225]">
+        <div className="relative flex min-h-screen w-full max-w-[480px] flex-col bg-[#FEFAF5] shadow-[0_0_45px_rgba(47,34,17,0.12)]">
+          <HomeHeader />
+          <main className="relative z-10 flex-1 px-6 pb-6 pt-5 max-[480px]:px-5 max-[480px]:pb-5 max-[480px]:pt-3">{children}</main>
+          <SiteFooter />
+          <Suspense fallback={null}>
+            <HomeBottomNav />
+          </Suspense>
+        </div>
       </div>
-    </div>
+    </SessionProvider>
   );
 }

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { FileCheck2, House, ScrollText } from 'lucide-react';
 
 import { getAdminAccess } from '@/lib/admin-access';
 
@@ -26,15 +27,24 @@ export default async function AdminLayout({
           <nav className="flex flex-wrap gap-2">
             <Link
               href="/"
-              className="flex h-11 items-center rounded-[9px] border border-[#ead8c6] bg-white px-4 text-[15px] font-semibold text-[#66594d] transition hover:bg-[#fff8f0]"
+              className="flex h-11 items-center gap-2 rounded-[9px] border border-[#ead8c6] bg-white px-4 text-[15px] font-semibold text-[#66594d] transition hover:bg-[#fff8f0]"
             >
+              <House className="h-4 w-4" />
               홈
             </Link>
             <Link
               href="/admin/bazi-prompts"
-              className="flex h-11 items-center rounded-[9px] bg-[#191450] px-4 text-[15px] font-semibold text-white transition hover:bg-[#24206a]"
+              className="flex h-11 items-center gap-2 rounded-[9px] bg-[#191450] px-4 text-[15px] font-semibold text-white transition hover:bg-[#24206a]"
             >
+              <ScrollText className="h-4 w-4" />
               프롬프트
+            </Link>
+            <Link
+              href="/admin/final-drafts"
+              className="flex h-11 items-center gap-2 rounded-[9px] border border-[#cfc9e7] bg-[#f5f3ff] px-4 text-[15px] font-semibold text-[#191450] transition hover:bg-[#ebe7ff]"
+            >
+              <FileCheck2 className="h-4 w-4" />
+              최종본
             </Link>
           </nav>
         </header>

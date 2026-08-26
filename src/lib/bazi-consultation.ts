@@ -18,6 +18,8 @@ import {
 
 const FINALIZE_STEP_RESULT_CHAR_LIMIT = 4800;
 const COMPACTED_STEP_RESULT_MAX_TOKENS = 1800;
+const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
+const OPENAI_FINAL_MODEL = process.env.OPENAI_FINAL_MODEL || 'gpt-4.1-mini';
 
 export type ConsultationPromptSubject = { subjectName: string; result: BaziResult };
 
@@ -123,31 +125,9 @@ async function runBaziGenerationPipeline(adminSupabase: unknown, result: BaziRes
     const steps = enabledSteps.length > 0 ? enabledSteps : config.steps.slice(0, 1);
     const subjectContext = buildMultiSubjectPromptContext(subjects);
 
-    if (!config.enabled) {
-        const singleStep = steps[0];
-        const userPrompt = renderBaziPromptTemplate(singleStep.userPromptTemplate, result, subjectContext);
-        const stepResult = await runBaziAnalysisStep(singleStep, config, result, '', subjectContext);
-
-        if (!stepResult.ok || !stepResult.content.trim()) {
-            throw new Error(stepResult.error || '사주 해설 분석 단계가 실패했습니다.');
-        }
-
-        return {
-            interpretation: stepResult.content,
-            prompt: userPrompt,
-            promptVersion: config.version,
-            metadata: {
-                promptVersion: config.version,
-                model: config.model || DEEPSEEK_MODEL,
-                generatedAt: new Date().toISOString(),
-                consultationTypeKey: consultationType.key,
-                promptSettingKey: consultationType.promptSettingKey,
-                steps: [stepResult],
-            },
-        };
-    }
-
-    const stepResults = config.executionMode === 'sequential'
+    const stepResults = !config.enabled
+        ? [await runBaziAnalysisStep(steps[0], config, result, '', subjectContext)]
+        : config.executionMode === 'sequential'
         ? await runSequentialBaziAnalysisSteps(steps, config, result, subjectContext)
         : await Promise.all(steps.map((step) => runBaziAnalysisStep(step, config, result, '', subjectContext)));
     const successfulStepResults = stepResults.filter((step) => step.ok && step.content.trim());
@@ -161,17 +141,17 @@ async function runBaziGenerationPipeline(adminSupabase: unknown, result: BaziRes
         ...subjectContext,
         stepResults: stepResultsText,
     });
-    const interpretation = await requestDeepSeekCompletion({
-        model: config.model || DEEPSEEK_MODEL,
+    const interpretation = await requestOpenAIFinalCompletion({
         systemPrompt: config.finalize.systemPrompt,
         userPrompt: finalPrompt,
         maxTokens: config.finalize.maxTokens,
         temperature: config.finalize.temperature,
-        errorLabel: 'DeepSeek final bazi consultation failed',
     });
     const metadata: BaziGenerationMetadata = {
         promptVersion: config.version,
-        model: config.model || DEEPSEEK_MODEL,
+        model: OPENAI_FINAL_MODEL,
+        analysisModel: config.model || DEEPSEEK_MODEL,
+        finalModel: OPENAI_FINAL_MODEL,
         generatedAt: new Date().toISOString(),
         consultationTypeKey: consultationType.key,
         promptSettingKey: consultationType.promptSettingKey,
@@ -184,6 +164,58 @@ async function runBaziGenerationPipeline(adminSupabase: unknown, result: BaziRes
         promptVersion: config.version,
         metadata,
     };
+}
+
+async function requestOpenAIFinalCompletion({
+    systemPrompt,
+    userPrompt,
+    maxTokens,
+    temperature,
+}: {
+    systemPrompt: string;
+    userPrompt: string;
+    maxTokens: number;
+    temperature: number;
+}) {
+    const apiKey = process.env.OPENAI_API_KEY || process.env.CHATGPT_API_KEY;
+    if (!apiKey) throw new Error('ChatGPT API 키가 설정되어 있지 않습니다.');
+
+    const response = await fetch(OPENAI_RESPONSES_URL, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            model: OPENAI_FINAL_MODEL,
+            instructions: systemPrompt,
+            input: userPrompt,
+            max_output_tokens: maxTokens,
+            temperature,
+            store: false,
+        }),
+        cache: 'no-store',
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+        console.error('OpenAI final bazi consultation failed:', data);
+        throw new Error('최종 상담문 생성에 실패했습니다.');
+    }
+
+    const content = data?.output
+        ?.flatMap((item: { type?: string; content?: unknown[] }) => item.type === 'message' ? item.content || [] : [])
+        .filter((item: { type?: string; text?: unknown }) => item.type === 'output_text' && typeof item.text === 'string')
+        .map((item: { text: string }) => item.text.trim())
+        .filter(Boolean)
+        .join('\n\n');
+
+    if (!content) {
+        console.error('OpenAI final bazi consultation failed: empty output', data);
+        throw new Error('최종 상담문 생성 결과가 비어 있습니다.');
+    }
+
+    return content;
 }
 
 async function buildFinalStepResultsText(results: BaziPromptStepResult[], config: BaziPromptPipelineConfig) {
