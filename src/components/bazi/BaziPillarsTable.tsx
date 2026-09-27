@@ -23,6 +23,37 @@ const detailKeyByPillar: Record<PillarKey, 'hour' | 'day' | 'month' | 'year'> = 
   year: 'year',
 };
 
+function getPillar(result: BaziResult, key: PillarKey) {
+  if (key === 'time') {
+    return result.four_pillars?.time || result.four_pillars?.hour;
+  }
+  return result.four_pillars?.[key];
+}
+
+function getPillarText(result: BaziResult, key: PillarKey) {
+  const pillar = getPillar(result, key);
+
+  return {
+    stem: pillar?.gan?.ch || pillar?.gan?.kr || '-',
+    branch: pillar?.ji?.ch || pillar?.ji?.kr || '-',
+  };
+}
+
+function getHiddenStemsText(result: BaziResult, key: PillarKey) {
+  const pillar = getPillar(result, key);
+  if (pillar?.jijanggan && Array.isArray(pillar.jijanggan) && pillar.jijanggan.length > 0) {
+    const list = pillar.jijanggan.map((j) => (typeof j === 'string' ? j : j?.ch || j?.kr)).filter(Boolean);
+    if (list.length > 0) return list.join(', ');
+  }
+
+  const analysisDetail = result.analysis?.details?.[detailKeyByPillar[key]];
+  if (analysisDetail?.branch?.jijanggan && Array.isArray(analysisDetail.branch.jijanggan)) {
+    return analysisDetail.branch.jijanggan.join(', ');
+  }
+
+  return '없음';
+}
+
 export default function BaziPillarsTable({ result }: { result: BaziResult }) {
   return (
     <section>
@@ -46,7 +77,7 @@ export default function BaziPillarsTable({ result }: { result: BaziResult }) {
         <div className="grid grid-cols-4 text-center">
           {pillarOrder.map((pillar) => {
             const pillarText = getPillarText(result, pillar.key);
-            const hiddenStems = result.analysis?.details?.[detailKeyByPillar[pillar.key]]?.branch?.jijanggan?.join(', ') || '없음';
+            const hiddenStems = getHiddenStemsText(result, pillar.key);
 
             return (
               <article key={pillar.key} className="min-w-0 border-r border-[#eadfd4] last:border-r-0">
@@ -67,15 +98,6 @@ export default function BaziPillarsTable({ result }: { result: BaziResult }) {
       </div>
     </section>
   );
-}
-
-function getPillarText(result: BaziResult, key: PillarKey) {
-  const pillar = result.four_pillars?.[key];
-
-  return {
-    stem: pillar?.gan?.ch || pillar?.gan?.kr || '-',
-    branch: pillar?.ji?.ch || pillar?.ji?.kr || '-',
-  };
 }
 
 function getTenGod(result: BaziResult, key?: string) {

@@ -213,10 +213,11 @@ function getElementBalance(result: BaziResult) {
 
   if (pillars) {
     pillarOrder.forEach(({ key }) => {
-      const ganElement = elementByChar[pillars[key]?.gan?.ch || ''];
+      const pillar = key === 'time' ? (pillars.time || pillars.hour) : pillars[key];
+      const ganElement = elementByChar[pillar?.gan?.ch || pillar?.gan?.kr || ''];
       if (ganElement) counts[ganElement] += 1;
 
-      const branchChar = pillars[key]?.ji?.ch || '';
+      const branchChar = pillar?.ji?.ch || pillar?.ji?.kr || '';
       const hiddenStems = extractHiddenStems(getPillarDetail(result, key)?.branch?.jijanggan) || hiddenStemsByBranch[branchChar] || [];
       const weights = hiddenStemWeightsByLength[hiddenStems.length] || [];
 

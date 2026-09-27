@@ -1,6 +1,6 @@
 'use client';
 
-import { BriefcaseBusiness, CalendarDays, Compass, HeartHandshake, Landmark, Leaf, Plus, RotateCcw, Save, Sparkles, Trash2, Users } from 'lucide-react';
+import { BriefcaseBusiness, CalendarDays, Check, Code2, Compass, Copy, HeartHandshake, Info, Landmark, Leaf, Plus, RotateCcw, Save, Sparkles, Trash2, Users, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 
@@ -26,21 +26,351 @@ type SaveStatus = {
   message: string;
 } | null;
 
+type VariableDoc = {
+  key: string;
+  name: string;
+  description: string;
+  example: string;
+  isJson?: boolean;
+};
+
+const PROMPT_VARIABLE_DOCS: Record<string, VariableDoc> = {
+  '{{baziJson}}': {
+    key: '{{baziJson}}',
+    name: '사주 만세력 표준 JSON',
+    description: '사주 4주 원국, 일간, 12운성, 오행 분석(과다/결핍/비율), 형충회합, 신살, 대운 3단계, 세운을 모두 포함한 표준 페이로드입니다.',
+    isJson: true,
+    example: JSON.stringify({
+      gender: "남",
+      age: 36,
+      dayMaster: "戊",
+      pillars: {
+        year: ["甲", "子"],
+        month: ["丙", "寅"],
+        day: ["戊", "辰"],
+        time: ["壬", "戌"]
+      },
+      unseong: {
+        year: "태",
+        month: "장생",
+        day: "관대",
+        time: "묘"
+      },
+      fiveElements: {
+        dominant: ["木", "火"],
+        deficient: ["金"],
+        percentages: { 목: 35, 화: 30, 토: 20, 금: 0, 수: 15 },
+        summary: "목화 기운이 왕성하고 금 기운이 부족한 명식"
+      },
+      interactions: ["인진 방합(木)", "진술 충(辰戌沖)"],
+      specialStars: {
+        year: ["화개살"],
+        month: [],
+        day: ["괴강살", "백호대살"],
+        time: ["화개살", "역마살"]
+      },
+      daewoon: {
+        previous: ["甲", "子", 2016, 2025, 26, 35],
+        current: ["癸", "亥", 2026, 2035, 36, 45],
+        next: ["壬", "戌", 2036, 2045, 46, 55]
+      },
+      sewoon: [2026, "丙", "午"]
+    }, null, 2)
+  },
+  '{{baziSummary}}': {
+    key: '{{baziSummary}}',
+    name: '사주 종합 자연어 요약문',
+    description: '원국의 글자, 오행 분포, 형충회합, 주요 신살, 현재 대운/세운을 읽기 쉬운 한국어 문단으로 요약한 텍스트입니다.',
+    example: `[성별: 남, 나이: 36세]인 분이 [년주: 갑(甲)자(子) / 월주: 병(丙)인(寅) / 일주: 무(戊)진(辰) / 시주: 임(壬)술(戌)] 명식으로 태어났습니다.
+[오행 분포: 목(35%), 화(30%), 토(20%), 수(15%), 금(0%) (과다: 木, 火 / 부족: 金)]
+[형충회합: 인진 방합(木), 진술 충(辰戌沖)]
+[주요 신살: 년주: 화개살 / 일주: 괴강살, 백호대살 / 시주: 화개살, 역마살]
+[현재 운 흐름: 이전 대운 甲子(26~35세, 2016~2025년) / 현재 대운 癸亥(36~45세, 2026~2035년) / 이후 대운 壬戌(46~55세, 2036~2045년) / 현재 세운 2026년 丙午]입니다.
+[대운 연도 범위: 이전 2016~2025년 / 현재 2026~2035년 / 이후 2036~2045년]입니다.`
+  },
+  '{{gender}}': {
+    key: '{{gender}}',
+    name: '성별',
+    description: '사용자 성별',
+    example: '남'
+  },
+  '{{userAge}}': {
+    key: '{{userAge}}',
+    name: '사용자 나이',
+    description: '사용자의 현재 나이 (한국 나이 또는 만 나이)',
+    example: '36세'
+  },
+  '{{yearPillar}}': {
+    key: '{{yearPillar}}',
+    name: '년주 (연도 기둥)',
+    description: '년주 천간과 지지 (한글 및 한자 병기)',
+    example: '갑(甲)자(子)'
+  },
+  '{{monthPillar}}': {
+    key: '{{monthPillar}}',
+    name: '월주 (월 기둥)',
+    description: '월주 천간과 지지 (한글 및 한자 병기)',
+    example: '병(丙)인(寅)'
+  },
+  '{{dayPillar}}': {
+    key: '{{dayPillar}}',
+    name: '일주 (본인 기둥)',
+    description: '일주 천간(일간)과 지지 (한글 및 한자 병기)',
+    example: '무(戊)진(辰)'
+  },
+  '{{timePillar}}': {
+    key: '{{timePillar}}',
+    name: '시주 (시간 기둥)',
+    description: '시주 천간과 지지 (한글 및 한자 병기)',
+    example: '임(壬)술(戌)'
+  },
+  '{{twelveUnseong}}': {
+    key: '{{twelveUnseong}}',
+    name: '12운성 (포태법)',
+    description: '년/월/일/시 네 기둥의 12운성 에너지 레벨',
+    example: '년주: 태 / 월주: 장생 / 일주: 관대 / 시주: 묘'
+  },
+  '{{fiveElementsSummary}}': {
+    key: '{{fiveElementsSummary}}',
+    name: '오행 비율 요약',
+    description: '사주 내 목/화/토/금/수 오행 분포 비율',
+    example: '목(35%), 화(30%), 토(20%), 수(15%), 금(0%)'
+  },
+  '{{dominantElements}}': {
+    key: '{{dominantElements}}',
+    name: '과다 오행',
+    description: '사주 원국에서 가장 왕성하거나 쏠려있는 오행',
+    example: '木, 火'
+  },
+  '{{deficientElements}}': {
+    key: '{{deficientElements}}',
+    name: '부족/결핍 오행',
+    description: '사주 원국에서 없거나 세력이 약한 오행',
+    example: '金'
+  },
+  '{{interactionsList}}': {
+    key: '{{interactionsList}}',
+    name: '형충회합 목록',
+    description: '천간합/충 및 지지 삼합, 방합, 육합, 형, 충, 파, 해 목록',
+    example: '인진 방합(木), 진술 충(辰戌沖)'
+  },
+  '{{climate}}': {
+    key: '{{climate}}',
+    name: '조후 상태',
+    description: '원국의 계절적 온도/습도 균형 상태',
+    example: '조열(燥熱)'
+  },
+  '{{specialStars}}': {
+    key: '{{specialStars}}',
+    name: '주요 신살',
+    description: '기둥별 배치된 길신 및 흉신 목록',
+    example: '년주: 화개살 / 일주: 괴강살, 백호대살 / 시주: 화개살, 역마살'
+  },
+  '{{currentYear}}': {
+    key: '{{currentYear}}',
+    name: '현재 연도',
+    description: 'KST 기준 현재 연도 (4자리 숫자)',
+    example: '2026'
+  },
+  '{{currentSewoon}}': {
+    key: '{{currentSewoon}}',
+    name: '현재 세운 간지',
+    description: '현재 연도의 간지 글자',
+    example: '丙午'
+  },
+  '{{previousDaewoon}}': {
+    key: '{{previousDaewoon}}',
+    name: '이전 대운',
+    description: '직전 10년간 지나온 대운 간지 및 나이/연도',
+    example: '甲子(26~35세, 2016~2025년)'
+  },
+  '{{previousDaewoonYearRange}}': {
+    key: '{{previousDaewoonYearRange}}',
+    name: '이전 대운 연도 범위',
+    description: '이전 대운 기간',
+    example: '2016~2025년'
+  },
+  '{{currentDaewoon}}': {
+    key: '{{currentDaewoon}}',
+    name: '현재 대운',
+    description: '현재 머물고 있는 10년 대운 간지 및 나이/연도',
+    example: '癸亥(36~45세, 2026~2035년)'
+  },
+  '{{currentDaewoonYearRange}}': {
+    key: '{{currentDaewoonYearRange}}',
+    name: '현재 대운 연도 범위',
+    description: '현재 대운 기간',
+    example: '2026~2035년'
+  },
+  '{{nextDaewoon}}': {
+    key: '{{nextDaewoon}}',
+    name: '다음 대운',
+    description: '앞으로 다가올 10년 대운 간지 및 나이/연도',
+    example: '壬戌(46~55세, 2036~2045년)'
+  },
+  '{{nextDaewoonYearRange}}': {
+    key: '{{nextDaewoonYearRange}}',
+    name: '다음 대운 연도 범위',
+    description: '다음 대운 기간',
+    example: '2036~2045년'
+  },
+  '{{subjectCount}}': {
+    key: '{{subjectCount}}',
+    name: '상담 인원 수',
+    description: '상담에 참여하는 총 인물 수',
+    example: '2'
+  },
+  '{{subjectsJson}}': {
+    key: '{{subjectsJson}}',
+    name: '다중 인물 사주 JSON',
+    description: '궁합/가족 상담 시 대상자 전원의 사주 원국 정보가 포함된 배열 JSON',
+    isJson: true,
+    example: JSON.stringify([
+      {
+        name: "김철수",
+        bazi: {
+          gender: "남",
+          age: 36,
+          pillars: {
+            year: ["甲", "子"],
+            month: ["丙", "寅"],
+            day: ["戊", "辰"],
+            time: ["壬", "戌"]
+          }
+        }
+      },
+      {
+        name: "이영희",
+        bazi: {
+          gender: "여",
+          age: 33,
+          pillars: {
+            year: ["丁", "卯"],
+            month: ["癸", "丑"],
+            day: ["癸", "酉"],
+            time: ["丙", "辰"]
+          }
+        }
+      }
+    ], null, 2)
+  },
+  '{{subjectsSummary}}': {
+    key: '{{subjectsSummary}}',
+    name: '다중 인물 명식 요약문',
+    description: '각 인물의 명식 요약을 묶어둔 텍스트',
+    example: `[인물 1: 김철수]
+[성별: 남, 나이: 36세]인 분이 [년주: 갑(甲)자(子) / 월주: 병(丙)인(寅) / 일주: 무(戊)진(辰) / 시주: 임(壬)술(戌)] 명식으로 태어났습니다.
+
+[인물 2: 이영희]
+[성별: 여, 나이: 33세]인 분이 [년주: 정(丁)묘(卯) / 월주: 계(癸)축(丑) / 일주: 계(癸)유(酉) / 시주: 병(丙)진(辰)] 명식으로 태어났습니다.`
+  },
+  '{{person1Name}}': {
+    key: '{{person1Name}}',
+    name: '1번 인물 이름',
+    description: '첫 번째 대상자 이름',
+    example: '김철수'
+  },
+  '{{person1BaziJson}}': {
+    key: '{{person1BaziJson}}',
+    name: '1번 인물 baziJson',
+    description: '첫 번째 대상자의 baziJson 문자열',
+    example: '{"gender":"남","age":36,"pillars":{...}}'
+  },
+  '{{person1BaziSummary}}': {
+    key: '{{person1BaziSummary}}',
+    name: '1번 인물 요약문',
+    description: '첫 번째 대상자의 명식 요약 텍스트',
+    example: '[성별: 남, 나이: 36세]인 분이 [년주: 갑(甲)자(子) / 월주: 병(丙)인(寅)...] 태어났습니다.'
+  },
+  '{{person2Name}}': {
+    key: '{{person2Name}}',
+    name: '2번 인물 이름',
+    description: '두 번째 대상자 이름',
+    example: '이영희'
+  },
+  '{{person2BaziJson}}': {
+    key: '{{person2BaziJson}}',
+    name: '2번 인물 baziJson',
+    description: '두 번째 대상자의 baziJson 문자열',
+    example: '{"gender":"여","age":33,"pillars":{...}}'
+  },
+  '{{person2BaziSummary}}': {
+    key: '{{person2BaziSummary}}',
+    name: '2번 인물 요약문',
+    description: '두 번째 대상자의 명식 요약 텍스트',
+    example: '[성별: 여, 나이: 33세]인 분이 [년주: 정(丁)묘(卯) / 월주: 계(癸)축(丑)...] 태어났습니다.'
+  },
+  '{{previousStepResults}}': {
+    key: '{{previousStepResults}}',
+    name: '이전 단계 누적 분석 초안',
+    description: '순차 실행 모드에서 직전 단계들까지 생성된 분석 내용',
+    example: `[원국 구조 분석]
+일간 무토는 인월에 태어나 실령하였으나...`
+  },
+  '{{stepResults}}': {
+    key: '{{stepResults}}',
+    name: '전체 분석 초안 묶음',
+    description: '최종 편집(finalize) 단계에 전달되는 앞선 모든 분석 단계의 초안',
+    example: `[원국 구조 분석]
+일간 무토(戊土)는 월지 인목 편관을 보아...
+
+[성향 및 관계 분석]
+책임감이 강하고 묵직한 추진력을 가지며...
+
+[적성 및 일의 방식 분석]
+체계적인 기획이나 조직 관리 분야에서 강점을...`
+  },
+};
+
 const promptVariableGroups = [
   {
-    label: '기본 명식',
-    variables: ['{{baziJson}}', '{{baziSummary}}', '{{gender}}'],
+    label: '기본 명식 / 요약',
+    variables: ['{{baziJson}}', '{{baziSummary}}', '{{gender}}', '{{userAge}}'],
   },
   {
-    label: '기둥/운',
-    variables: ['{{yearPillar}}', '{{monthPillar}}', '{{dayPillar}}', '{{timePillar}}', '{{currentYear}}'],
+    label: '사주 기둥 (원국)',
+    variables: ['{{yearPillar}}', '{{monthPillar}}', '{{dayPillar}}', '{{timePillar}}', '{{twelveUnseong}}'],
   },
   {
-    label: '다중 인물',
-    variables: ['{{subjectsJson}}', '{{subjectsSummary}}', '{{person1Name}}', '{{person1BaziJson}}', '{{person1BaziSummary}}', '{{person2Name}}', '{{person2BaziJson}}', '{{person2BaziSummary}}'],
+    label: '오행 / 신살 / 형충',
+    variables: [
+      '{{fiveElementsSummary}}',
+      '{{dominantElements}}',
+      '{{deficientElements}}',
+      '{{interactionsList}}',
+      '{{climate}}',
+      '{{specialStars}}',
+    ],
   },
   {
-    label: '파이프라인',
+    label: '대운 / 세운',
+    variables: [
+      '{{currentYear}}',
+      '{{currentSewoon}}',
+      '{{previousDaewoon}}',
+      '{{previousDaewoonYearRange}}',
+      '{{currentDaewoon}}',
+      '{{currentDaewoonYearRange}}',
+      '{{nextDaewoon}}',
+      '{{nextDaewoonYearRange}}',
+    ],
+  },
+  {
+    label: '다중 인물 (궁합 등)',
+    variables: [
+      '{{subjectCount}}',
+      '{{subjectsJson}}',
+      '{{subjectsSummary}}',
+      '{{person1Name}}',
+      '{{person1BaziJson}}',
+      '{{person1BaziSummary}}',
+      '{{person2Name}}',
+      '{{person2BaziJson}}',
+      '{{person2BaziSummary}}',
+    ],
+  },
+  {
+    label: '파이프라인 단계',
     variables: ['{{previousStepResults}}', '{{stepResults}}'],
   },
 ];
@@ -61,6 +391,8 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
   const [newConsultationIconKey, setNewConsultationIconKey] = useState<ConsultationIconKey>('sparkles');
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState<SaveStatus>(null);
+  const [activeVariableKey, setActiveVariableKey] = useState<string | null>('{{baziJson}}');
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const selectedSetting = useMemo(() => (
     promptSettings.find((setting) => setting.key === selectedKey) || promptSettings[0]
@@ -488,21 +820,98 @@ export default function BaziPromptPipelineForm({ settings, defaultConfig }: Prop
               여러 분석 프롬프트를 실행한 뒤 최종 편집 프롬프트에서 하나의 상담문으로 통합합니다.
             </p>
             <div className="mt-4 max-w-5xl rounded-[10px] border border-[#eadfd4] bg-[#fffaf4] px-4 py-4">
-              <p className="text-[13px] font-semibold text-[#66594d]">사용 가능 변수</p>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5">
+                  <Info className="h-4 w-4 text-[#b06b16]" strokeWidth={2} />
+                  <p className="text-[13px] font-semibold text-[#66594d]">사용 가능 변수 <span className="text-[11px] font-normal text-[#8a7a68]">(변수를 클릭하면 상세 설명 및 실제 주입되는 값 예시를 확인할 수 있습니다)</span></p>
+                </div>
+              </div>
+
               <div className="mt-3 grid gap-3 lg:grid-cols-2">
                 {promptVariableGroups.map((group) => (
                   <div key={group.label}>
                     <p className="text-[12px] font-semibold text-[#b06b16]">{group.label}</p>
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      {group.variables.map((variable) => (
-                        <code key={variable} className="rounded-[6px] border border-[#ead8c6] bg-white px-2 py-1 text-[12px] font-semibold text-[#2a2018]">
-                          {variable}
-                        </code>
-                      ))}
+                      {group.variables.map((variable) => {
+                        const isSelected = activeVariableKey === variable;
+                        return (
+                          <button
+                            key={variable}
+                            type="button"
+                            onClick={() => setActiveVariableKey((prev) => prev === variable ? null : variable)}
+                            className={`cursor-pointer rounded-[6px] border px-2 py-1 text-[12px] font-semibold transition ${
+                              isSelected
+                                ? 'border-[#191450] bg-[#191450] text-white shadow-sm'
+                                : 'border-[#ead8c6] bg-white text-[#2a2018] hover:border-[#b06b16] hover:bg-[#fff5ea]'
+                            }`}
+                          >
+                            {variable}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
               </div>
+
+              {activeVariableKey && PROMPT_VARIABLE_DOCS[activeVariableKey] && (
+                <div className="mt-4 overflow-hidden rounded-[8px] border border-[#ebd8c4] bg-[#fffcf8] p-3.5 shadow-sm">
+                  <div className="flex items-center justify-between gap-2 border-b border-[#ebd8c4] pb-2">
+                    <div className="flex items-center gap-2">
+                      <Code2 className="h-4 w-4 text-[#191450]" strokeWidth={2} />
+                      <span className="font-mono text-[13px] font-bold text-[#191450]">{activeVariableKey}</span>
+                      <span className="text-[12px] font-semibold text-[#8a6a42]">({PROMPT_VARIABLE_DOCS[activeVariableKey].name})</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(activeVariableKey);
+                          setCopiedKey(activeVariableKey);
+                          setTimeout(() => setCopiedKey(null), 2000);
+                        }}
+                        className="flex items-center gap-1 rounded-[5px] border border-[#ead8c6] bg-white px-2 py-1 text-[11px] font-semibold text-[#66594d] transition hover:bg-[#f7f0e8]"
+                      >
+                        {copiedKey === activeVariableKey ? (
+                          <>
+                            <Check className="h-3 w-3 text-[#357247]" strokeWidth={2.5} />
+                            <span className="text-[#357247]">복사됨</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3 w-3" strokeWidth={2} />
+                            <span>변수 복사</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveVariableKey(null)}
+                        className="rounded-[5px] p-1 text-[#8a7a68] hover:bg-[#f0e7dc] hover:text-[#2a2018]"
+                        title="닫기"
+                      >
+                        <X className="h-3.5 w-3.5" strokeWidth={2} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="mt-2 text-[12.5px] leading-[1.5] text-[#5c4f42]">
+                    {PROMPT_VARIABLE_DOCS[activeVariableKey].description}
+                  </p>
+
+                  <div className="mt-2.5">
+                    <div className="mb-1 flex items-center justify-between text-[11px] font-semibold text-[#8a7a68]">
+                      <span>실제 주입 값 예시 (Sample Value):</span>
+                      {PROMPT_VARIABLE_DOCS[activeVariableKey].isJson && (
+                        <span className="rounded bg-[#ebe3d7] px-1.5 py-0.5 font-mono text-[10px] text-[#554a3e]">JSON</span>
+                      )}
+                    </div>
+                    <pre className="max-h-60 overflow-auto rounded-[6px] border border-[#e2d2c1] bg-[#1e1e24] p-2.5 font-mono text-[11.5px] leading-relaxed text-[#f4efe8]">
+                      <code>{PROMPT_VARIABLE_DOCS[activeVariableKey].example}</code>
+                    </pre>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
